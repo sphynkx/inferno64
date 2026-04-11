@@ -40,6 +40,9 @@ struct ConParser
 	int havsaved;
 	SHORT savedx;
 	SHORT savedy;
+
+	int attrinit;
+	WORD defattr;
 };
 
 static ConParser outparser;
@@ -278,6 +281,126 @@ consolerestorecurs(HANDLE h, ConParser *p)
 }
 
 
+static WORD
+ansi2fg(int n)
+{
+	switch(n){
+	case 30: return 0;
+	case 31: return FOREGROUND_RED;
+	case 32: return FOREGROUND_GREEN;
+	case 33: return FOREGROUND_RED | FOREGROUND_GREEN;
+	case 34: return FOREGROUND_BLUE;
+	case 35: return FOREGROUND_RED | FOREGROUND_BLUE;
+	case 36: return FOREGROUND_GREEN | FOREGROUND_BLUE;
+	case 37: return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+	}
+	return (WORD)-1;
+}
+
+static WORD
+ansi2bg(int n)
+{
+	switch(n){
+	case 40: return 0;
+	case 41: return BACKGROUND_RED;
+	case 42: return BACKGROUND_GREEN;
+	case 43: return BACKGROUND_RED | BACKGROUND_GREEN;
+	case 44: return BACKGROUND_BLUE;
+	case 45: return BACKGROUND_RED | BACKGROUND_BLUE;
+	case 46: return BACKGROUND_GREEN | BACKGROUND_BLUE;
+	case 47: return BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE;
+	}
+	return (WORD)-1;
+}
+
+static void
+consoleinitattr(HANDLE h, ConParser *p)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+
+	if(p->attrinit)
+		return;
+	if(!consolegetinfo(h, &info))
+		return;
+
+	p->defattr = info.wAttributes;
+	p->attrinit = 1;
+}
+
+static void
+consoleapplysgr(HANDLE h, ConParser *p, int code)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	WORD attr, fg, bg;
+
+	consoleinitattr(h, p);
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	attr = info.wAttributes;
+
+	if(code == 0){
+		if(p->attrinit)
+			SetConsoleTextAttribute(h, p->defattr);
+		return;
+	}
+
+	fg = ansi2fg(code);
+	if(fg != (WORD)-1){
+		attr &= ~(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+		attr |= fg;
+		SetConsoleTextAttribute(h, attr);
+		return;
+	}
+
+	bg = ansi2bg(code);
+	if(bg != (WORD)-1){
+		attr &= ~(BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY);
+		attr |= bg;
+		SetConsoleTextAttribute(h, attr);
+		return;
+	}
+}
+
+static void
+consolehandlem(HANDLE h, ConParser *p)
+{
+	int i, v, havev;
+
+	if(p->n == 0){
+		consoleapplysgr(h, p, 0);
+		return;
+	}
+
+	v = 0;
+	havev = 0;
+
+	for(i = 0; i < p->n; i++){
+		if(p->buf[i] >= '0' && p->buf[i] <= '9'){
+			v = v * 10 + (p->buf[i] - '0');
+			havev = 1;
+			continue;
+		}
+		if(p->buf[i] == ';'){
+			if(havev)
+				consoleapplysgr(h, p, v);
+			else
+				consoleapplysgr(h, p, 0);
+			v = 0;
+			havev = 0;
+			continue;
+		}
+		return;
+	}
+
+	if(havev)
+		consoleapplysgr(h, p, v);
+	else
+		consoleapplysgr(h, p, 0);
+}
+
+
 static int
 csiparam(ConParser *p, int def)
 {
@@ -414,6 +537,9 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 				break;
 			case 'u':
 				consolerestorecurs(h, p);
+				break;
+			case 'm':
+				consolehandlem(h, p);
 				break;
 			default:
 				break;
