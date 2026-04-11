@@ -23,6 +23,278 @@ static	char*	path;
 static	HANDLE	kbdh = INVALID_HANDLE_VALUE;
 static	HANDLE	conh = INVALID_HANDLE_VALUE;
 static	HANDLE	errh = INVALID_HANDLE_VALUE;
+
+enum {
+	ConNorm,
+	ConEsc,
+	ConCsi
+};
+
+typedef struct ConParser ConParser;
+struct ConParser
+{
+	int state;
+	char buf[32];
+	int n;
+};
+
+static ConParser outparser;
+static ConParser errparser;
+
+static int
+isconsolehandle(HANDLE h)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+
+	if(h == INVALID_HANDLE_VALUE || h == NULL)
+		return 0;
+	if(!GetConsoleScreenBufferInfo(h, &info))
+		return 0;
+	return 1;
+}
+
+static int
+consolegetinfo(HANDLE h, CONSOLE_SCREEN_BUFFER_INFO *info)
+{
+	if(!GetConsoleScreenBufferInfo(h, info))
+		return 0;
+	return 1;
+}
+
+static void
+consolesetpos(HANDLE h, SHORT x, SHORT y)
+{
+	COORD p;
+	CONSOLE_SCREEN_BUFFER_INFO info;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	if(x < 0)
+		x = 0;
+	if(y < 0)
+		y = 0;
+	if(x >= info.dwSize.X)
+		x = info.dwSize.X - 1;
+	if(y >= info.dwSize.Y)
+		y = info.dwSize.Y - 1;
+
+	p.X = x;
+	p.Y = y;
+	SetConsoleCursorPosition(h, p);
+}
+
+static void
+consolemove(HANDLE h, int dx, int dy)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	SHORT x, y;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	x = info.dwCursorPosition.X + dx;
+	y = info.dwCursorPosition.Y + dy;
+
+	if(x < 0)
+		x = 0;
+	if(y < 0)
+		y = 0;
+	if(x >= info.dwSize.X)
+		x = info.dwSize.X - 1;
+	if(y >= info.dwSize.Y)
+		y = info.dwSize.Y - 1;
+
+	consolesetpos(h, x, y);
+}
+
+static void
+consolehome(HANDLE h)
+{
+	consolesetpos(h, 0, 0);
+}
+
+static void
+consoleclearscreen(HANDLE h)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	COORD home;
+	DWORD n, nwritten;
+	WORD attr;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	n = info.dwSize.X * info.dwSize.Y;
+	home.X = 0;
+	home.Y = 0;
+	attr = info.wAttributes;
+
+	FillConsoleOutputCharacter(h, ' ', n, home, &nwritten);
+	FillConsoleOutputAttribute(h, attr, n, home, &nwritten);
+	SetConsoleCursorPosition(h, home);
+}
+
+static void
+consolecleartoeol(HANDLE h)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	COORD p;
+	DWORD n, nwritten;
+	WORD attr;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	p = info.dwCursorPosition;
+	attr = info.wAttributes;
+	n = info.dwSize.X - p.X;
+
+	FillConsoleOutputCharacter(h, ' ', n, p, &nwritten);
+	FillConsoleOutputAttribute(h, attr, n, p, &nwritten);
+	SetConsoleCursorPosition(h, p);
+}
+
+static int
+csiparam(ConParser *p, int def)
+{
+	int i, v;
+
+	if(p->n <= 0)
+		return def;
+
+	v = 0;
+	for(i = 0; i < p->n; i++){
+		if(p->buf[i] < '0' || p->buf[i] > '9')
+			return def;
+		v = v * 10 + (p->buf[i] - '0');
+	}
+	if(v <= 0)
+		return def;
+	return v;
+}
+
+static void
+flushplain(HANDLE h, char *buf, int n, int *total)
+{
+	DWORD nwritten;
+
+	if(n <= 0)
+		return;
+
+	if(WriteFile(h, buf, n, &nwritten, NULL))
+		*total += (int)nwritten;
+}
+
+static int
+consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
+{
+	char *buf;
+	char plain[256];
+	int i, np, total, m;
+	char ch;
+
+	if(!isconsolehandle(h)){
+		DWORD nwritten;
+		if(!WriteFile(h, vbuf, n, &nwritten, NULL))
+			return -1;
+		return (int)nwritten;
+	}
+
+	buf = (char*)vbuf;
+	np = 0;
+	total = 0;
+
+	for(i = 0; i < (int)n; i++){
+		ch = buf[i];
+
+		switch(p->state){
+		case ConNorm:
+			if(ch == 0x1B){
+				flushplain(h, plain, np, &total);
+				np = 0;
+				p->state = ConEsc;
+				total++;
+			}else{
+				if(np >= (int)sizeof(plain)){
+					flushplain(h, plain, np, &total);
+					np = 0;
+				}
+				plain[np++] = ch;
+			}
+			break;
+
+		case ConEsc:
+			if(ch == '['){
+				p->state = ConCsi;
+				p->n = 0;
+				total++;
+			}else{
+				p->state = ConNorm;
+				if(np >= (int)sizeof(plain)){
+					flushplain(h, plain, np, &total);
+					np = 0;
+				}
+				plain[np++] = ch;
+				total++;
+			}
+			break;
+
+		case ConCsi:
+			if((ch >= '0' && ch <= '9') || ch == ';'){
+				if(p->n < (int)sizeof(p->buf)-1)
+					p->buf[p->n++] = ch;
+				total++;
+				break;
+			}
+
+			p->buf[p->n] = 0;
+			m = csiparam(p, 1);
+
+			switch(ch){
+			case 'A':
+				consolemove(h, 0, -m);
+				break;
+			case 'B':
+				consolemove(h, 0, m);
+				break;
+			case 'C':
+				consolemove(h, m, 0);
+				break;
+			case 'D':
+				consolemove(h, -m, 0);
+				break;
+			case 'H':
+				consolehome(h);
+				break;
+			case 'J':
+				if(p->n == 0 || (p->n == 1 && p->buf[0] == '2'))
+					consoleclearscreen(h);
+				break;
+			case 'K':
+				consolecleartoeol(h);
+				break;
+			default:
+				break;
+			}
+
+			p->state = ConNorm;
+			p->n = 0;
+			total++;
+			break;
+
+		default:
+			p->state = ConNorm;
+			p->n = 0;
+			break;
+		}
+	}
+
+	flushplain(h, plain, np, &total);
+	return total;
+}
+
+
 static	int	donetermset = 0;
 static	int sleepers = 0;
 
@@ -466,7 +738,7 @@ read(int fd, void *buf, unsigned int n)
 }
 
 int
-write(int fd, const void *buf, uint n)
+write_ORIG(int fd, const void *buf, uint n)
 {
 	HANDLE h;
 	DWORD nn;
@@ -488,6 +760,34 @@ write(int fd, const void *buf, uint n)
 		return -1;
 	return (int)nn;
 }
+
+int
+write(int fd, const void *buf, uint n)
+{
+	HANDLE h;
+	DWORD nn;
+
+	if(fd == 1 || fd == 2){
+		if(!donetermset)
+			termset();
+		if(fd == 1){
+			h = conh;
+			if(h == INVALID_HANDLE_VALUE)
+				return -1;
+			return consolewrite(h, &outparser, buf, n);
+		}else{
+			h = errh;
+			if(h == INVALID_HANDLE_VALUE)
+				return -1;
+			return consolewrite(h, &errparser, buf, n);
+		}
+	}
+
+	if(!WriteFile(ntfd2h(fd), buf, n, &nn, NULL))
+		return -1;
+	return (int)nn;
+}
+
 
 /*
  * map handles and fds.

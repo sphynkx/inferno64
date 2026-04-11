@@ -375,3 +375,9 @@ os/pc64/forth.h
 _wrk
 usr/sphynkx
 n/local/
+*.c~
+*.c~~
+*.h~
+*.h~~
+mkfile~
+mkfile~~
