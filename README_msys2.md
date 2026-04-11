@@ -11,7 +11,7 @@ cd /opt
 git clone https://github.com/sphynkx/inferno64
 cd inferno64
 git fetch -all
-git switch msys2
+git switch ansi-lite
 export MKSH=`which bash`.exe
 export PATH=$PATH:/opt/inferno64/MinGW/amd64/bin/
 export ROOT=$(pwd)
