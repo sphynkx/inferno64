@@ -449,6 +449,29 @@ consolehandlem(HANDLE h, ConParser *p)
 }
 
 
+static void
+consoleshowcursor(HANDLE h, int visible)
+{
+	CONSOLE_CURSOR_INFO ci;
+
+	if(!GetConsoleCursorInfo(h, &ci))
+		return;
+
+	ci.bVisible = visible ? TRUE : FALSE;
+	SetConsoleCursorInfo(h, &ci);
+}
+
+
+static void
+consolehandlepriv(HANDLE h, ConParser *p, int set)
+{
+	if(p->n == 3 && p->buf[0] == '?' && p->buf[1] == '2' && p->buf[2] == '5'){
+		consoleshowcursor(h, set);
+		return;
+	}
+}
+
+
 static int
 csiparam(ConParser *p, int def)
 {
@@ -535,7 +558,7 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 			break;
 
 		case ConCsi:
-			if((ch >= '0' && ch <= '9') || ch == ';'){
+			if((ch >= '0' && ch <= '9') || ch == ';' || ch == '?'){
 				if(p->n < (int)sizeof(p->buf)-1)
 					p->buf[p->n++] = ch;
 				total++;
@@ -588,6 +611,12 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 				break;
 			case 'm':
 				consolehandlem(h, p);
+				break;
+			case 'h':
+				consolehandlepriv(h, p, 1);
+				break;
+			case 'l':
+				consolehandlepriv(h, p, 0);
 				break;
 			default:
 				break;
