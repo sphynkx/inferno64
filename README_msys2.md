@@ -29,7 +29,8 @@ MinGW/amd64/bin/emu.exe -r. -g1200x600
 As of MinGW branch:
 * Fixed build `mk` utility from scratch
 * Reworked some mkfiles - cmd-style commands replaced with bash-style ones; resolved cycle build issues.
-* Some tiny code modifications.
+* Some tiny code modifications to fix broken rebuilding.
 * Set static linking to prevent MSYS2 dlls requirement.
 * Set strip and upx pack for final binary (5.3M -> 396k). Optionally - added params in `mkconfig`.
 * Running app and wm window are beautified by app icon.
+* Implement small and lite ANSI support for console: cursor control (move goriz./vert., show/hide), colors, esc sequences.. Windows only feature for now.
