@@ -36,6 +36,10 @@ struct ConParser
 	int state;
 	char buf[32];
 	int n;
+
+	int havsaved;
+	SHORT savedx;
+	SHORT savedy;
 };
 
 static ConParser outparser;
@@ -251,6 +255,29 @@ consolecup(HANDLE h, int row, int col)
 }
 
 
+static void
+consolesavecurs(HANDLE h, ConParser *p)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	p->savedx = info.dwCursorPosition.X;
+	p->savedy = info.dwCursorPosition.Y;
+	p->havsaved = 1;
+}
+
+static void
+consolerestorecurs(HANDLE h, ConParser *p)
+{
+	if(!p->havsaved)
+		return;
+
+	consolesetpos(h, p->savedx, p->savedy);
+}
+
+
 static int
 csiparam(ConParser *p, int def)
 {
@@ -361,6 +388,7 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 				consolemove(h, -m, 0);
 				break;
 			case 'H':
+			case 'f':
 			{
 				int row, col;
 
@@ -380,6 +408,12 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 					consoleclearline(h);
 				else
 					consolecleartoeol(h);
+				break;
+			case 's':
+				consolesavecurs(h, p);
+				break;
+			case 'u':
+				consolerestorecurs(h, p);
 				break;
 			default:
 				break;
