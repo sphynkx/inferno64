@@ -293,6 +293,15 @@ ansi2fg(int n)
 	case 35: return FOREGROUND_RED | FOREGROUND_BLUE;
 	case 36: return FOREGROUND_GREEN | FOREGROUND_BLUE;
 	case 37: return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+
+	case 90: return FOREGROUND_INTENSITY;
+	case 91: return FOREGROUND_RED | FOREGROUND_INTENSITY;
+	case 92: return FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+	case 93: return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+	case 94: return FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+	case 95: return FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+	case 96: return FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+	case 97: return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
 	}
 	return (WORD)-1;
 }
@@ -309,6 +318,15 @@ ansi2bg(int n)
 	case 45: return BACKGROUND_RED | BACKGROUND_BLUE;
 	case 46: return BACKGROUND_GREEN | BACKGROUND_BLUE;
 	case 47: return BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE;
+
+	case 100: return BACKGROUND_INTENSITY;
+	case 101: return BACKGROUND_RED | BACKGROUND_INTENSITY;
+	case 102: return BACKGROUND_GREEN | BACKGROUND_INTENSITY;
+	case 103: return BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_INTENSITY;
+	case 104: return BACKGROUND_BLUE | BACKGROUND_INTENSITY;
+	case 105: return BACKGROUND_RED | BACKGROUND_BLUE | BACKGROUND_INTENSITY;
+	case 106: return BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY;
+	case 107: return BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY;
 	}
 	return (WORD)-1;
 }
@@ -331,7 +349,7 @@ static void
 consoleapplysgr(HANDLE h, ConParser *p, int code)
 {
 	CONSOLE_SCREEN_BUFFER_INFO info;
-	WORD attr, fg, bg;
+	WORD attr, fg, bg, deffg, defbg;
 
 	consoleinitattr(h, p);
 
@@ -339,10 +357,39 @@ consoleapplysgr(HANDLE h, ConParser *p, int code)
 		return;
 
 	attr = info.wAttributes;
+	deffg = p->defattr & (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+	defbg = p->defattr & (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY);
 
 	if(code == 0){
 		if(p->attrinit)
 			SetConsoleTextAttribute(h, p->defattr);
+		return;
+	}
+
+	if(code == 1){
+		attr |= FOREGROUND_INTENSITY;
+		SetConsoleTextAttribute(h, attr);
+		return;
+	}
+
+	if(code == 22){
+		attr &= ~FOREGROUND_INTENSITY;
+		attr |= (deffg & FOREGROUND_INTENSITY);
+		SetConsoleTextAttribute(h, attr);
+		return;
+	}
+
+	if(code == 39){
+		attr &= ~(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+		attr |= deffg;
+		SetConsoleTextAttribute(h, attr);
+		return;
+	}
+
+	if(code == 49){
+		attr &= ~(BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY);
+		attr |= defbg;
+		SetConsoleTextAttribute(h, attr);
 		return;
 	}
 
@@ -362,6 +409,7 @@ consoleapplysgr(HANDLE h, ConParser *p, int code)
 		return;
 	}
 }
+
 
 static void
 consolehandlem(HANDLE h, ConParser *p)
