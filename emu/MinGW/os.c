@@ -20,9 +20,9 @@ extern	int	cflag;
 DWORD	PlatformId;
 DWORD	consolestate;
 static	char*	path;
-static	HANDLE	kbdh = INVALID_HANDLE_VALUE;
-static	HANDLE	conh = INVALID_HANDLE_VALUE;
-static	HANDLE	errh = INVALID_HANDLE_VALUE;
+static HANDLE conh = INVALID_HANDLE_VALUE;
+static HANDLE kbdh = INVALID_HANDLE_VALUE;
+static HANDLE errh = INVALID_HANDLE_VALUE;
 
 enum {
 	ConNorm,
@@ -43,6 +43,7 @@ struct ConParser
 
 	int attrinit;
 	WORD defattr;
+
 };
 
 static ConParser outparser;
@@ -185,6 +186,74 @@ consoleclearline(HANDLE h)
 	SetConsoleCursorPosition(h, p);
 }
 
+
+static void
+consolecleartobol(HANDLE h)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	COORD start, cur;
+	DWORD n, nwritten;
+	WORD attr;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	cur = info.dwCursorPosition;
+	start = cur;
+	start.X = 0;
+	attr = info.wAttributes;
+	n = cur.X + 1;
+
+	FillConsoleOutputCharacter(h, ' ', n, start, &nwritten);
+	FillConsoleOutputAttribute(h, attr, n, start, &nwritten);
+	SetConsoleCursorPosition(h, cur);
+}
+
+
+static void
+consoleclearfromcursor(HANDLE h)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	COORD p;
+	DWORD n, nwritten;
+	WORD attr;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	p = info.dwCursorPosition;
+	attr = info.wAttributes;
+	n = (info.dwSize.Y - p.Y - 1) * info.dwSize.X + (info.dwSize.X - p.X);
+
+	FillConsoleOutputCharacter(h, ' ', n, p, &nwritten);
+	FillConsoleOutputAttribute(h, attr, n, p, &nwritten);
+	SetConsoleCursorPosition(h, p);
+}
+
+
+static void
+consolecleartocursor(HANDLE h)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	COORD home, cur;
+	DWORD n, nwritten;
+	WORD attr;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	cur = info.dwCursorPosition;
+	home.X = 0;
+	home.Y = 0;
+	attr = info.wAttributes;
+	n = cur.Y * info.dwSize.X + cur.X + 1;
+
+	FillConsoleOutputCharacter(h, ' ', n, home, &nwritten);
+	FillConsoleOutputAttribute(h, attr, n, home, &nwritten);
+	SetConsoleCursorPosition(h, cur);
+}
+
+
 static int
 parse2params(ConParser *p, int *a, int *b, int defa, int defb)
 {
@@ -255,6 +324,54 @@ consolecup(HANDLE h, int row, int col)
 		y = info.dwSize.Y - 1;
 
 	consolesetpos(h, x, y);
+}
+
+
+static void
+consolecha(HANDLE h, int col)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	if(col <= 0)
+		col = 1;
+
+	consolesetpos(h, col - 1, info.dwCursorPosition.Y);
+}
+
+
+static void
+consolenextline(HANDLE h, int n)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	SHORT y;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	if(n <= 0)
+		n = 1;
+
+	y = info.dwCursorPosition.Y + n;
+	consolesetpos(h, 0, y);
+}
+
+static void
+consoleprevline(HANDLE h, int n)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	SHORT y;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	if(n <= 0)
+		n = 1;
+
+	y = info.dwCursorPosition.Y - n;
+	consolesetpos(h, 0, y);
 }
 
 
@@ -345,6 +462,7 @@ consoleinitattr(HANDLE h, ConParser *p)
 	p->attrinit = 1;
 }
 
+
 static void
 consoleapplysgr(HANDLE h, ConParser *p, int code)
 {
@@ -357,6 +475,7 @@ consoleapplysgr(HANDLE h, ConParser *p, int code)
 		return;
 
 	attr = info.wAttributes;
+
 	deffg = p->defattr & (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
 	defbg = p->defattr & (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY);
 
@@ -409,7 +528,6 @@ consoleapplysgr(HANDLE h, ConParser *p, int code)
 		return;
 	}
 }
-
 
 static void
 consolehandlem(HANDLE h, ConParser *p)
@@ -581,6 +699,15 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 			case 'D':
 				consolemove(h, -m, 0);
 				break;
+			case 'E':
+				consolenextline(h, m);
+				break;
+			case 'F':
+				consoleprevline(h, m);
+				break;
+			case 'G':
+				consolecha(h, m);
+				break;
 			case 'H':
 			case 'f':
 			{
@@ -594,14 +721,20 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 				break;
 			}
 			case 'J':
-				if(p->n == 0 || (p->n == 1 && p->buf[0] == '2'))
+				if(p->n == 0 || (p->n == 1 && p->buf[0] == '0'))
+					consoleclearfromcursor(h);
+				else if(p->n == 1 && p->buf[0] == '1')
+					consolecleartocursor(h);
+				else if(p->n == 1 && p->buf[0] == '2')
 					consoleclearscreen(h);
 				break;
 			case 'K':
-				if(p->n == 1 && p->buf[0] == '2')
-					consoleclearline(h);
-				else
+				if(p->n == 0 || (p->n == 1 && p->buf[0] == '0'))
 					consolecleartoeol(h);
+				else if(p->n == 1 && p->buf[0] == '1')
+					consolecleartobol(h);
+				else if(p->n == 1 && p->buf[0] == '2')
+					consoleclearline(h);
 				break;
 			case 's':
 				consolesavecurs(h, p);
@@ -1077,30 +1210,6 @@ read(int fd, void *buf, unsigned int n)
 	if(h == INVALID_HANDLE_VALUE)
 		return -1;
 	if(!ReadFile(h, buf, n, &nn, NULL))
-		return -1;
-	return (int)nn;
-}
-
-int
-write_ORIG(int fd, const void *buf, uint n)
-{
-	HANDLE h;
-	DWORD nn;
-
-	if(fd == 1 || fd == 2){
-		if(!donetermset)
-			termset();
-		if(fd == 1)
-			h = conh;
-		else
-			h = errh;
-		if(h == INVALID_HANDLE_VALUE)
-			return -1;
-		if(!WriteFile(h, buf, n, &nn, NULL))
-			return -1;
-		return (int)nn;
-	}
-	if(!WriteFile(ntfd2h(fd), buf, n, &nn, NULL))
 		return -1;
 	return (int)nn;
 }
