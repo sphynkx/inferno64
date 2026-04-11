@@ -155,6 +155,102 @@ consolecleartoeol(HANDLE h)
 	SetConsoleCursorPosition(h, p);
 }
 
+
+static void
+consoleclearline(HANDLE h)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	COORD p, start;
+	DWORD n, nwritten;
+	WORD attr;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	p = info.dwCursorPosition;
+	start = p;
+	start.X = 0;
+	attr = info.wAttributes;
+	n = info.dwSize.X;
+
+	FillConsoleOutputCharacter(h, ' ', n, start, &nwritten);
+	FillConsoleOutputAttribute(h, attr, n, start, &nwritten);
+	SetConsoleCursorPosition(h, p);
+}
+
+static int
+parse2params(ConParser *p, int *a, int *b, int defa, int defb)
+{
+	int i, v, seensemi, havev;
+
+	*a = defa;
+	*b = defb;
+
+	if(p->n <= 0)
+		return 1;
+
+	v = 0;
+	seensemi = 0;
+	havev = 0;
+
+	for(i = 0; i < p->n; i++){
+		if(p->buf[i] >= '0' && p->buf[i] <= '9'){
+			v = v * 10 + (p->buf[i] - '0');
+			havev = 1;
+			continue;
+		}
+		if(p->buf[i] == ';' && !seensemi){
+			if(havev)
+				*a = v;
+			v = 0;
+			havev = 0;
+			seensemi = 1;
+			continue;
+		}
+		return 0;
+	}
+
+	if(seensemi){
+		if(havev)
+			*b = v;
+	}else if(havev){
+		*a = v;
+	}
+
+	if(*a <= 0)
+		*a = defa;
+	if(*b <= 0)
+		*b = defb;
+
+	return 1;
+}
+
+static void
+consolecup(HANDLE h, int row, int col)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	SHORT x, y;
+
+	if(!consolegetinfo(h, &info))
+		return;
+
+	if(row <= 0)
+		row = 1;
+	if(col <= 0)
+		col = 1;
+
+	y = row - 1;
+	x = col - 1;
+
+	if(x >= info.dwSize.X)
+		x = info.dwSize.X - 1;
+	if(y >= info.dwSize.Y)
+		y = info.dwSize.Y - 1;
+
+	consolesetpos(h, x, y);
+}
+
+
 static int
 csiparam(ConParser *p, int def)
 {
@@ -265,14 +361,25 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 				consolemove(h, -m, 0);
 				break;
 			case 'H':
-				consolehome(h);
+			{
+				int row, col;
+
+				if(p->n == 0){
+					consolehome(h);
+				}else if(parse2params(p, &row, &col, 1, 1)){
+					consolecup(h, row, col);
+				}
 				break;
+			}
 			case 'J':
 				if(p->n == 0 || (p->n == 1 && p->buf[0] == '2'))
 					consoleclearscreen(h);
 				break;
 			case 'K':
-				consolecleartoeol(h);
+				if(p->n == 1 && p->buf[0] == '2')
+					consoleclearline(h);
+				else
+					consolecleartoeol(h);
 				break;
 			default:
 				break;
