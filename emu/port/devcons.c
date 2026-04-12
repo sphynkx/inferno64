@@ -125,15 +125,6 @@ kbdslave(void *a)
 
 #ifdef __MINGW32__
 
-/*
- * MinGW/MSYS2 console keyboard reader:
- * one reader only, based on ReadConsoleInput via readekbd().
- *
- * Legacy printable input still goes to kbdq for /dev/cons.
- * Enhanced key events go to ekbdq for /dev/ekeyboard.
- *
- * This is intentionally isolated to the Windows console backend.
- */
 static void
 ekbdputc(int ch)
 {
@@ -142,6 +133,14 @@ ekbdputc(int ch)
 	gkbdputc(ekbdq, ch);
 }
 
+/*
+ * MinGW/MSYS2 console keyboard reader:
+ * single source of truth for console input.
+ *
+ * All key events go to /dev/ekeyboard.
+ * Ordinary text input is also translated to the legacy console queue
+ * so /dev/cons and the shell continue to work from the same event stream.
+ */
 void
 winkbdslave(void *a)
 {
@@ -155,12 +154,12 @@ winkbdslave(void *a)
 			continue;
 
 		/*
-		 * Feed enhanced event stream.
+		 * Full event stream for enhanced console clients.
 		 */
 		ekbdputc(k);
 
 		/*
-		 * Preserve legacy console semantics for /dev/cons:
+		 * Legacy text stream for /dev/cons:
 		 * only ordinary character input contributes to kbdq.
 		 */
 		if(k >= 0 && k < Spec){
@@ -255,10 +254,6 @@ consattach(char *spec)
 	if(kp == 0 && !dflag) {
 		kp = 1;
 #ifdef __MINGW32__
-		/*
-		 * Windows console path: use a single enhanced reader that
-		 * feeds both legacy console input and /dev/ekeyboard.
-		 */
 		kproc("kbd", winkbdslave, 0, 0);
 #else
 		kproc("kbd", kbdslave, 0, 0);
