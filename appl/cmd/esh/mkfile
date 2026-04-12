@@ -1,0 +1,66 @@
+<../../../mkconfig
+
+TARG=esh.dis\
+	arg.dis\
+	expr.dis\
+	mpexpr.dis\
+	file2chan.dis\
+	mload.dis\
+	regex.dis\
+	sexprs.dis\
+	std.dis\
+	string.dis\
+	tk.dis\
+	echo.dis\
+	csv.dis\
+	test.dis\
+
+INS=	$ROOT/dis/esh.dis\
+	$ROOT/dis/esh/arg.dis\
+	$ROOT/dis/esh/expr.dis\
+	$ROOT/dis/esh/file2chan.dis\
+	$ROOT/dis/esh/mload.dis\
+	$ROOT/dis/esh/mpexpr.dis\
+	$ROOT/dis/esh/regex.dis\
+	$ROOT/dis/esh/std.dis\
+	$ROOT/dis/esh/string.dis\
+#	$ROOT/dis/esh/tk.dis\
+	$ROOT/dis/esh/echo.dis\
+	$ROOT/dis/esh/csv.dis\
+	$ROOT/dis/esh/test.dis\
+
+SYSMODULES=\
+	bufio.m\
+	draw.m\
+	env.m\
+	filepat.m\
+	lock.m\
+	sexprs.m\
+	sh.m\
+	string.m\
+	sys.m\
+	tk.m\
+	tkclient.m\
+
+DISBIN=$ROOT/dis/esh
+
+<$ROOT/mkfiles/mkdis
+
+all:V:		$TARG
+
+install:V:	$INS
+	cp $DISBIN/esh.dis $DISBIN/..
+
+nuke:V: clean
+	rm -f $INS
+
+clean:V:
+	rm -f *.dis *.sbl
+
+uninstall:V:
+	rm -f $INS
+
+$ROOT/dis/esh.dis:	esh.dis
+	rm -f $ROOT/dis/esh.dis && cp esh.dis $ROOT/dis/esh.dis
+
+%.dis: ${SYSMODULES:%=$MODDIR/%}

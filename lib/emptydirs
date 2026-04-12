@@ -150,6 +150,7 @@ dis/mpeg
 dis/ndb
 dis/palm
 dis/sh
+dis/esh
 dis/spki
 dis/spree
 dis/spree/clients

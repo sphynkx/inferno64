@@ -5,6 +5,7 @@ DIRS=\
 	auxi\
 	avr\
 	disk\
+	esh\
 	fs\
 	games\
 	install\

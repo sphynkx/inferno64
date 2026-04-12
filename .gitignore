@@ -312,6 +312,7 @@ MinGW/*/bin/*
 /dis/demo/whiteboard
 /dis/disk
 /dis/ebook
+/dis/esh
 /dis/fs
 /dis/games
 /dis/grid
@@ -379,5 +380,7 @@ n/local/
 *.c~~
 *.h~
 *.h~~
+*.b~
+*.b~~
 mkfile~
 mkfile~~

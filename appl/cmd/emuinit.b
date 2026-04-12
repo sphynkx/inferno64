@@ -36,30 +36,66 @@ init()
 	mod->init(nil, args);
 }
 
+
+hasekeyboard(): int
+{
+	fd := sys->open("/dev/ekeyboard", Sys->OREAD);
+	if(fd == nil)
+		return 0;
+	return 1;
+}
+
+loadshell(path: string): Command
+{
+	mod: Command;
+	if(path != nil && path[0] == '/')
+		mod = load Command path;
+	else{
+		mod = load Command "/dis/"+path;
+		if(mod == nil)
+			mod = load Command "/"+path;
+	}
+	return mod;
+}
+
+
 loadmod(args: list of string): (Command, list of string)
 {
 	path := Command->PATH;
-	
+	mod: Command;
+
 	if(args != nil)
 		path = hd args;
-	else
-		args = "sh" :: "-l" :: nil;	# add startup option
+	else{
+		if(hasekeyboard()){
+			mod = loadshell("/dis/esh.dis");
+			if(mod != nil)
+				return (mod, "esh" :: "-l" :: nil);
+		}
 
-	# try loading the module directly.
-	mod: Command;
-	if (path != nil && path[0] == '/')
-		mod = load Command path;
-	else {
-		mod = load Command "/dis/"+path;
-		if (mod == nil)
-			mod = load Command "/"+path;
+		mod = loadshell(path);
+		if(mod != nil)
+			return (mod, "sh" :: "-l" :: nil);
+
+		sys->fprint(sys->fildes(2), "emuinit: unable to load default shell\n");
+		raise "fail:error";
 	}
+
+	# try loading the requested module directly.
+	mod = loadshell(path);
 	if(mod != nil)
 		return (mod, args);
 
 	# if we can't load the module directly, try getting the shell to run it.
 	err := sys->sprint("%r");
-	mod = load Command Command->PATH;
+
+	if(hasekeyboard()){
+		mod = loadshell("/dis/esh.dis");
+		if(mod != nil)
+			return (mod, "esh" :: "-c" :: "$*" :: args);
+	}
+
+	mod = loadshell(Command->PATH);
 	if(mod == nil){
 		sys->fprint(sys->fildes(2), "emuinit: unable to load %s: %s\n", path, err);
 		raise "fail:error";
@@ -67,6 +103,8 @@ loadmod(args: list of string): (Command, list of string)
 
 	return (mod, "sh" :: "-c" :: "$*" :: args);
 }
+
+
 
 getenv(v: string): list of string
 {
@@ -113,3 +151,4 @@ unquoted(s: string): list of string
 		return unquoted(s + "'");
 	return args;
 }
+
