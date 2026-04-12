@@ -22,6 +22,7 @@ enum
 	Qhoststderr,
 	Qjit,
 	Qkeyboard,
+	Qekeyboard,
 	Qkprint,
 	Qmemory,
 	Qmsec,
@@ -47,6 +48,7 @@ Dirtab contab[] =
 	"hoststderr",	{Qhoststderr},	0,	0222,
 	"jit",	{Qjit},	0,	0666,
 	"keyboard",	{Qkeyboard},	0,	0666,
+	"ekeyboard",	{Qekeyboard},	0,	0666,
 	"kprint",	{Qkprint},	0,	0444,
 	"memory",	{Qmemory},	0,	0444,
 	"msec",		{Qmsec},	NUMSIZE,	0444,
@@ -64,6 +66,7 @@ Queue*	gkscanq;		/* Graphics keyboard raw scancodes */
 extern	char	gkscanid[];	/* name of raw scan format (if defined) */
 Queue*	gkbdq;			/* Graphics keyboard unprocessed input */
 Queue*	kbdq;			/* Console window unprocessed keyboard input */
+Queue*	ekbdq;			/* Enhanced console keyboard input */
 Queue*	lineq;			/* processed console input */
 
 char	*ossysname;
@@ -120,6 +123,68 @@ kbdslave(void *a)
 	/* pexit("kbdslave", 0); */	/* not reached */
 }
 
+#ifdef __MINGW32__
+
+/*
+ * MinGW/MSYS2 console keyboard reader:
+ * one reader only, based on ReadConsoleInput via readekbd().
+ *
+ * Legacy printable input still goes to kbdq for /dev/cons.
+ * Enhanced key events go to ekbdq for /dev/ekeyboard.
+ *
+ * This is intentionally isolated to the Windows console backend.
+ */
+static void
+ekbdputc(int ch)
+{
+	if(ekbdq == nil)
+		return;
+	gkbdputc(ekbdq, ch);
+}
+
+void
+winkbdslave(void *a)
+{
+	int k;
+	char b;
+
+	USED(a);
+	for(;;){
+		k = readekbd();
+		if(k < 0)
+			continue;
+
+		/*
+		 * Feed enhanced event stream.
+		 */
+		ekbdputc(k);
+
+		/*
+		 * Preserve legacy console semantics for /dev/cons:
+		 * only ordinary character input contributes to kbdq.
+		 */
+		if(k >= 0 && k < Spec){
+			b = k;
+			if(k == '\r')
+				b = '\n';
+
+			if(kbd.raw == 0){
+				switch(b){
+				case 0x15:
+					write(1, "^U\n", 3);
+					break;
+				default:
+					write(1, &b, 1);
+					break;
+				}
+			}
+			qproduce(kbdq, &b, 1);
+		}
+	}
+	/* not reached */
+}
+#endif
+
 void
 gkbdputc(Queue *q, int ch)
 {
@@ -167,6 +232,9 @@ consinit(void)
 	gkbdq = qopen(512, 0, nil, nil);
 	if(gkbdq == 0)
 		panic("no memory");
+	ekbdq = qopen(512, 0, nil, nil);
+	if(ekbdq == 0)
+		panic("no memory");
 	randominit();
 }
 
@@ -186,7 +254,15 @@ consattach(char *spec)
 
 	if(kp == 0 && !dflag) {
 		kp = 1;
+#ifdef __MINGW32__
+		/*
+		 * Windows console path: use a single enhanced reader that
+		 * feeds both legacy console input and /dev/ekeyboard.
+		 */
+		kproc("kbd", winkbdslave, 0, 0);
+#else
 		kproc("kbd", kbdslave, 0, 0);
+#endif
 	}
 	return devattach('c', spec);
 }
@@ -389,6 +465,9 @@ consread(Chan *c, void *va, long n, vlong offset)
 		if(offset == 0)
 			return readstr(0, va, n, gkscanid);
 		return qread(gkscanq, va, n);
+
+	case Qekeyboard:
+		return qread(ekbdq, va, n);
 
 	case Qkeyboard:
 		return qread(gkbdq, va, n);

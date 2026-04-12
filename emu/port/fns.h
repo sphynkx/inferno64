@@ -181,6 +181,7 @@ int		qwrite(Queue*, void*, int);
 ulong	randomread(void *xp, ulong n);
 void	randominit(void);
 int		readkbd(void);
+int 	readekbd(void);
 int		readnum(ulong, char*, ulong, ulong, int);
 int		readnum_vlong(ulong, char*, ulong, vlong, int);
 int		readstr(ulong, char*, ulong, char*);

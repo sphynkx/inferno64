@@ -451,6 +451,7 @@ extern	char	*ossysname;
 extern	char	*eve;
 extern	Queue*	kbdq;
 extern	Queue*	gkbdq;
+extern   Queue*  ekbdq;
 extern	Queue*	gkscanq;
 extern	int	Xsize;
 extern	int	Ysize;

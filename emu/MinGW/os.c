@@ -8,6 +8,7 @@
 #include	"dat.h"
 #include	"fns.h"
 #include	"error.h"
+#include "keyboard.h"
 
 #include	"r16.h"
 
@@ -961,6 +962,101 @@ readkbd(void)
 	if(buf[0] == '\r')
 		buf[0] = '\n';
 	return buf[0];
+}
+
+
+int
+readekbd(void)
+{
+	INPUT_RECORD rec;
+	KEY_EVENT_RECORD *k;
+	DWORD r;
+	WCHAR wc;
+	DWORD ctrl;
+	int ch;
+
+	for(;;){
+		if(!ReadConsoleInput(kbdh, &rec, 1, &r))
+			panic("enhanced keyboard fail");
+		if(r == 0)
+			continue;
+
+		if(rec.EventType != KEY_EVENT)
+			continue;
+
+		k = &rec.Event.KeyEvent;
+
+		/*
+		 * Ignore key-up events.
+		 */
+		if(!k->bKeyDown)
+			continue;
+
+		ctrl = k->dwControlKeyState;
+
+		switch(k->wVirtualKeyCode){
+		case VK_LEFT:
+			return Left;
+		case VK_RIGHT:
+			return Right;
+		case VK_UP:
+			return Up;
+		case VK_DOWN:
+			return Down;
+		case VK_HOME:
+			return Home;
+		case VK_END:
+			return End;
+		case VK_PRIOR:
+			return Pgup;
+		case VK_NEXT:
+			return Pgdown;
+		case VK_INSERT:
+			return Ins;
+		case VK_DELETE:
+			return Del;
+		case VK_PRINT:
+			return Print;
+		case VK_SCROLL:
+			return Scroll;
+		case VK_PAUSE:
+			return Pause;
+		case VK_TAB:
+			if(ctrl & SHIFT_PRESSED)
+				return BackTab;
+			return '\t';
+		case VK_RETURN:
+			return '\n';
+		case VK_ESCAPE:
+			return Esc;
+		}
+
+		wc = k->uChar.UnicodeChar;
+		if(wc != 0){
+			ch = (int)wc;
+
+			/*
+			 * Preserve old Ctrl-C behaviour.
+			 */
+			if(ch == 0x03){
+				termrestore();
+				ExitProcess(0);
+			}
+
+			/*
+			 * Match older console path expectations.
+			 */
+			if(ch == '\r')
+				ch = '\n';
+
+			if(ctrl & (LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED)){
+				if((ch & ~0xFF) == 0)
+					return APP | (ch & 0xFF);
+			}
+
+			return ch;
+		}
+	}
 }
 
 void
