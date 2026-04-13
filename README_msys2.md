@@ -33,4 +33,4 @@ As of MinGW branch:
 * Set static linking to prevent MSYS2 dlls requirement.
 * Set strip and upx pack for final binary (5.3M -> 396k). Optionally - added params in `mkconfig`.
 * Running app and wm window are beautified by app icon.
-* Implement small and lite ANSI support for console: cursor control (move goriz./vert., show/hide), colors, esc sequences.. Windows only feature for now.
+* Implement a lightweight win-console layer with basic ANSI terminal control and an extended event-based wide-char input path.
