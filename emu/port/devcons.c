@@ -144,8 +144,10 @@ ekbdputc(int ch)
 void
 winkbdslave(void *a)
 {
-	int k;
+	int k, nb;
+	Rune r;
 	char b;
+	char ubuf[UTFmax];
 
 	USED(a);
 	for(;;){
@@ -158,26 +160,32 @@ winkbdslave(void *a)
 		 */
 		ekbdputc(k);
 
-		/*
-		 * Legacy text stream for /dev/cons:
-		 * only ordinary character input contributes to kbdq.
-		 */
 		if(k >= 0 && k < Spec){
-			b = k;
-			if(k == '\r')
-				b = '\n';
+			r = k;
+			if(r == '\r')
+				r = '\n';
 
-			if(kbd.raw == 0){
-				switch(b){
-				case 0x15:
-					write(1, "^U\n", 3);
-					break;
-				default:
-					write(1, &b, 1);
-					break;
+			if(r < 0x80){
+				b = r;
+				if(kbd.raw == 0){
+					switch(b){
+					case 0x15:
+						write(1, "^U\n", 3);
+						break;
+					default:
+						write(1, &b, 1);
+						break;
+					}
 				}
+				qproduce(kbdq, &b, 1);
+			}else{
+				nb = runetochar(ubuf, &r);
+				if(nb <= 0)
+					continue;
+				if(kbd.raw == 0)
+					write(1, ubuf, nb);
+				qproduce(kbdq, ubuf, nb);
 			}
-			qproduce(kbdq, &b, 1);
 		}
 	}
 	/* not reached */
