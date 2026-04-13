@@ -25,6 +25,11 @@ static HANDLE conh = INVALID_HANDLE_VALUE;
 static HANDLE kbdh = INVALID_HANDLE_VALUE;
 static HANDLE errh = INVALID_HANDLE_VALUE;
 
+static UINT hostinputcp = 0;
+static UINT hostoutputcp = 0;
+static int consolecpsaved = 0;
+static int consolecpchanged = 0;
+
 enum {
 	ConNorm,
 	ConEsc,
@@ -44,11 +49,61 @@ struct ConParser
 
 	int attrinit;
 	WORD defattr;
-
 };
 
 static ConParser outparser;
 static ConParser errparser;
+
+enum {
+	UTF8CP = 65001
+};
+
+static void
+saveconsolecp(void)
+{
+	if(kbdh == INVALID_HANDLE_VALUE)
+		return;
+
+	hostinputcp = GetConsoleCP();
+	hostoutputcp = GetConsoleOutputCP();
+
+	if(hostinputcp != 0 && hostoutputcp != 0)
+		consolecpsaved = 1;
+}
+
+static void
+setutf8consolecp(void)
+{
+	if(!consolecpsaved)
+		return;
+
+	if(hostinputcp == UTF8CP && hostoutputcp == UTF8CP)
+		return;
+
+	if(SetConsoleCP(UTF8CP) && SetConsoleOutputCP(UTF8CP))
+		consolecpchanged = 1;
+	else{
+		if(hostinputcp != 0)
+			SetConsoleCP(hostinputcp);
+		if(hostoutputcp != 0)
+			SetConsoleOutputCP(hostoutputcp);
+		consolecpchanged = 0;
+	}
+}
+
+static void
+restoreconsolecp(void)
+{
+	if(!consolecpsaved || !consolecpchanged)
+		return;
+
+	if(hostinputcp != 0)
+		SetConsoleCP(hostinputcp);
+	if(hostoutputcp != 0)
+		SetConsoleOutputCP(hostoutputcp);
+
+	consolecpchanged = 0;
+}
 
 static int
 isconsolehandle(HANDLE h)
@@ -164,7 +219,6 @@ consolecleartoeol(HANDLE h)
 	SetConsoleCursorPosition(h, p);
 }
 
-
 static void
 consoleclearline(HANDLE h)
 {
@@ -186,7 +240,6 @@ consoleclearline(HANDLE h)
 	FillConsoleOutputAttribute(h, attr, n, start, &nwritten);
 	SetConsoleCursorPosition(h, p);
 }
-
 
 static void
 consolecleartobol(HANDLE h)
@@ -210,7 +263,6 @@ consolecleartobol(HANDLE h)
 	SetConsoleCursorPosition(h, cur);
 }
 
-
 static void
 consoleclearfromcursor(HANDLE h)
 {
@@ -230,7 +282,6 @@ consoleclearfromcursor(HANDLE h)
 	FillConsoleOutputAttribute(h, attr, n, p, &nwritten);
 	SetConsoleCursorPosition(h, p);
 }
-
 
 static void
 consolecleartocursor(HANDLE h)
@@ -253,7 +304,6 @@ consolecleartocursor(HANDLE h)
 	FillConsoleOutputAttribute(h, attr, n, home, &nwritten);
 	SetConsoleCursorPosition(h, cur);
 }
-
 
 static int
 parse2params(ConParser *p, int *a, int *b, int defa, int defb)
@@ -327,7 +377,6 @@ consolecup(HANDLE h, int row, int col)
 	consolesetpos(h, x, y);
 }
 
-
 static void
 consolecha(HANDLE h, int col)
 {
@@ -341,7 +390,6 @@ consolecha(HANDLE h, int col)
 
 	consolesetpos(h, col - 1, info.dwCursorPosition.Y);
 }
-
 
 static void
 consolenextline(HANDLE h, int n)
@@ -375,7 +423,6 @@ consoleprevline(HANDLE h, int n)
 	consolesetpos(h, 0, y);
 }
 
-
 static void
 consolesavecurs(HANDLE h, ConParser *p)
 {
@@ -397,7 +444,6 @@ consolerestorecurs(HANDLE h, ConParser *p)
 
 	consolesetpos(h, p->savedx, p->savedy);
 }
-
 
 static WORD
 ansi2fg(int n)
@@ -462,7 +508,6 @@ consoleinitattr(HANDLE h, ConParser *p)
 	p->defattr = info.wAttributes;
 	p->attrinit = 1;
 }
-
 
 static void
 consoleapplysgr(HANDLE h, ConParser *p, int code)
@@ -567,7 +612,6 @@ consolehandlem(HANDLE h, ConParser *p)
 		consoleapplysgr(h, p, 0);
 }
 
-
 static void
 consoleshowcursor(HANDLE h, int visible)
 {
@@ -580,7 +624,6 @@ consoleshowcursor(HANDLE h, int visible)
 	SetConsoleCursorInfo(h, &ci);
 }
 
-
 static void
 consolehandlepriv(HANDLE h, ConParser *p, int set)
 {
@@ -589,7 +632,6 @@ consolehandlepriv(HANDLE h, ConParser *p, int set)
 		return;
 	}
 }
-
 
 static int
 csiparam(ConParser *p, int def)
@@ -772,19 +814,16 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 	return total;
 }
 
-
 static	int	donetermset = 0;
 static	int sleepers = 0;
-
 
 __thread Proc    *up;
 
 HANDLE	ntfd2h(vlong);
 vlong	nth2fd(HANDLE);
-void	termrestore(void);
+static void	termrestore(void);
 char *hosttype = "Nt";
 char *cputype = "386";
-//extern void	(*coherence)(void) = nofence;
 
 static void
 pfree(Proc *p)
@@ -855,7 +894,6 @@ tramp(LPVOID p)
 	up = p;
 	up->func(up->arg);
 	pexit("", 0);
-	/* not reached */
 	for(;;)
 		panic("tramp");
 	return 0;
@@ -903,7 +941,7 @@ kproc(char *name, void (*func)(void*), void *arg, int flags)
 	lock(&procs.l);
 	if(procs.tail != nil) {
 		p->prev = procs.tail;
-		procs.tail->next = p;
+		procs.tail->next = p->next;
 	}
 	else {
 		procs.head = p;
@@ -955,7 +993,6 @@ readkbd(void)
 		panic("keyboard EOF");
 
 	if (buf[0] == 0x03) {
-		// INTR (CTRL+C)
 		termrestore();
 		ExitProcess(0);
 	}
@@ -963,7 +1000,6 @@ readkbd(void)
 		buf[0] = '\n';
 	return buf[0];
 }
-
 
 int
 readekbd(void)
@@ -986,9 +1022,6 @@ readekbd(void)
 
 		k = &rec.Event.KeyEvent;
 
-		/*
-		 * Ignore key-up events.
-		 */
 		if(!k->bKeyDown)
 			continue;
 
@@ -1035,17 +1068,11 @@ readekbd(void)
 		if(wc != 0){
 			ch = (int)wc;
 
-			/*
-			 * Preserve old Ctrl-C behaviour.
-			 */
 			if(ch == 0x03){
 				termrestore();
 				ExitProcess(0);
 			}
 
-			/*
-			 * Match older console path expectations.
-			 */
 			if(ch == '\r')
 				ch = '\n';
 
@@ -1062,7 +1089,7 @@ readekbd(void)
 void
 cleanexit(int x)
 {
-	sleep(2);		/* give user a chance to see message */
+	sleep(2);
 	termrestore();
 	ExitProcess(x);
 }
@@ -1101,11 +1128,9 @@ TrapHandler(LPEXCEPTION_POINTERS ureg)
 	int i;
 	char *name;
 	DWORD code;
-	// WORD pc;
 	char buf[ERRMAX];
 
 	code = ureg->ExceptionRecord->ExceptionCode;
-	// pc = ureg->ContextRecord->Eip;
 
 	name = nil;
 	for(i = 0; i < nelem(ecodes); i++) {
@@ -1119,12 +1144,7 @@ TrapHandler(LPEXCEPTION_POINTERS ureg)
 		snprint(buf, sizeof(buf), "unknown trap type (%#.8lux)\n", code);
 		name = buf;
 	}
-/*
-	if(pc != 0) {
-		snprint(buf, sizeof(buf), "%s: pc=0x%lux", name, pc);
-		name = buf;
-	}
-*/
+
 	switch (code) {
 	case EXCEPTION_FLT_DENORMAL_OPERAND:
 	case EXCEPTION_FLT_DIVIDE_BY_ZERO:
@@ -1133,11 +1153,7 @@ TrapHandler(LPEXCEPTION_POINTERS ureg)
 	case EXCEPTION_FLT_OVERFLOW:
 	case EXCEPTION_FLT_STACK_CHECK:
 	case EXCEPTION_FLT_UNDERFLOW:
-		/* clear exception flags and ensure safe empty state */
-		/*
-		_asm { fnclex };
-		_asm { fninit };
-		*/
+		break;
 	}
 	if (code == EXCEPTION_ACCESS_VIOLATION || code == EXCEPTION_DATATYPE_MISALIGNMENT || code == EXCEPTION_ILLEGAL_INSTRUCTION) {
 		MessageBoxA(NULL, name, "Inferno Fatal Exception", MB_OK | MB_ICONERROR);
@@ -1145,7 +1161,6 @@ TrapHandler(LPEXCEPTION_POINTERS ureg)
 	}
 
 	disfault(nil, name);
-	/* not reached */
 	return EXCEPTION_CONTINUE_EXECUTION;
 }
 
@@ -1157,28 +1172,37 @@ termset(void)
 	if(donetermset)
 		return;
 	donetermset = 1;
+
 	conh = GetStdHandle(STD_OUTPUT_HANDLE);
 	kbdh = GetStdHandle(STD_INPUT_HANDLE);
 	errh = GetStdHandle(STD_ERROR_HANDLE);
 	if(errh == INVALID_HANDLE_VALUE)
 		errh = conh;
 
-	// The following will fail if kbdh not from console (e.g. a pipe)
-	// in which case we don't care
-	GetConsoleMode(kbdh, &consolestate);
-	flag = consolestate;
-	flag = flag & ~(ENABLE_PROCESSED_INPUT|ENABLE_LINE_INPUT|ENABLE_ECHO_INPUT);
-	SetConsoleMode(kbdh, flag);
+	if(GetConsoleMode(kbdh, &consolestate)){
+		flag = consolestate;
+		flag &= ~(ENABLE_PROCESSED_INPUT|ENABLE_LINE_INPUT|ENABLE_ECHO_INPUT);
+		SetConsoleMode(kbdh, flag);
+
+		saveconsolecp();
+
+		setutf8consolecp();
+
+	}
 }
 
-void
+static void
 termrestore(void)
 {
 	if(kbdh != INVALID_HANDLE_VALUE)
 		SetConsoleMode(kbdh, consolestate);
+
+	if(consolecpsaved)
+		restoreconsolecp();
+
 }
 
-static	int	rebootok = 0;	/* is shutdown -r supported? */
+static	int	rebootok = 0;
 
 void
 osreboot(char *file, char **argv)
@@ -1204,17 +1228,12 @@ libinit(char *imod)
 	if(!GetVersionEx(&os))
 		panic("can't get os version");
 	PlatformId = os.dwPlatformId;
-	if (PlatformId == VER_PLATFORM_WIN32_NT) {	/* true for NT and 2000 */
+	if (PlatformId == VER_PLATFORM_WIN32_NT)
 		rebootok = 1;
-	} else {
+	else
 		rebootok = 0;
-	}
-	termset();
 
-	/*
-	if((int)INVALID_HANDLE_VALUE != -1 || sizeof(HANDLE) != sizeof(int))
-		panic("invalid handle value or size");
-	*/
+	termset();
 
 	if(WSAStartup(MAKEWORD(1, 1), &wasdat) != 0)
 		panic("no winsock.dll");
@@ -1247,42 +1266,6 @@ libinit(char *imod)
 
 	emuinit(imod);
 }
-
-/*
-void
-FPsave(void *fptr)
-{
-	_asm {
-		mov	eax, fptr
-		fstenv	[eax]
-	}
-}
-
-void
-FPrestore(void *fptr)
-{
-	_asm {
-		mov	eax, fptr
-		fldenv	[eax]
-	}
-}
-
-ulong
-umult(ulong a, ulong b, ulong *high)
-{
-	ulong lo, hi;
-
-	_asm {
-		mov	eax, a
-		mov	ecx, b
-		MUL	ecx
-		mov	lo, eax
-		mov	hi, edx
-	}
-	*high = hi;
-	return lo;
-}
-*/
 
 int
 close(int fd)
@@ -1337,13 +1320,6 @@ write(int fd, const void *buf, uint n)
 	return (int)nn;
 }
 
-
-/*
- * map handles and fds.
- * this code assumes sizeof(HANDLE) == sizeof(int),
- * that INVALID_HANDLE_VALUE is -1, and assumes
- * that all tests of invalid fds check only for -1, not < 0
- */
 vlong
 nth2fd(HANDLE h)
 {
@@ -1362,7 +1338,6 @@ oslopri(void)
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
 }
 
-/* Resolve system header name conflict */
 #undef Sleep
 void
 sleep(int secs)
@@ -1382,23 +1357,6 @@ sbrk(int size)
 	return brk;
 }
 
-	/*
-ulong
-getcallerpc(void *arg)
-{
-	ulong cpc;
-	_asm {
-		mov eax, dword ptr [ebp]
-		mov eax, dword ptr [eax+4]
-		mov dword ptr cpc, eax
-	}
-	return cpc;
-}
-	*/
-
-/*
- * Return an abitrary millisecond clock time
- */
 long
 osmillisec(void)
 {
@@ -1409,9 +1367,6 @@ osmillisec(void)
 #define SEC2HOUR (60L*SEC2MIN)
 #define SEC2DAY (24L*SEC2HOUR)
 
-/*
- *  days per month plus days/year
- */
 static	int	dmsize[] =
 {
 	365, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
@@ -1421,14 +1376,9 @@ static	int	ldmsize[] =
 	366, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 };
 
-/*
- *  return the days/month for the given year
- */
 static int*
 yrsize(int yr)
 {
-	/* a leap year is a multiple of 4, excluding centuries
-	 * that are not multiples of 400 */
 	if( (yr % 4 == 0) && (yr % 100 != 0 || yr % 400 == 0) )
 		return ldmsize;
 	else
@@ -1443,29 +1393,17 @@ tm2sec(SYSTEMTIME *tm)
 
 	secs = 0;
 
-	/*
-	 *  seconds per year
-	 */
 	for(i = 1970; i < tm->wYear; i++){
 		d2m = yrsize(i);
 		secs += d2m[0] * SEC2DAY;
 	}
 
-	/*
-	 *  seconds per month
-	 */
 	d2m = yrsize(tm->wYear);
 	for(i = 1; i < tm->wMonth; i++)
 		secs += d2m[i] * SEC2DAY;
 
-	/*
-	 * secs in last month
-	 */
 	secs += (tm->wDay-1) * SEC2DAY;
 
-	/*
-	 * hours, minutes, seconds
-	 */
 	secs += tm->wHour * SEC2HOUR;
 	secs += tm->wMinute * SEC2MIN;
 	secs += tm->wSecond;
@@ -1473,10 +1411,6 @@ tm2sec(SYSTEMTIME *tm)
 	return secs;
 }
 
-/*
- * Return the time since the epoch in microseconds
- * The epoch is defined at 1 Jan 1970
- */
 vlong
 osusectime(void)
 {
@@ -1491,7 +1425,7 @@ osusectime(void)
 vlong
 osnsec(void)
 {
-	return osusectime()*1000;	/* TO DO better */
+	return osusectime()*1000;
 }
 
 int
@@ -1523,14 +1457,10 @@ osyield(void)
 void
 ospause(void)
 {
-      for(;;)
-              sleep(1000000);
+	for(;;)
+		sleep(1000000);
 }
 
-/*
- * these should never be called, and are included
- * as stubs since we are linking against a library which defines them
- */
 int
 open(const char *path, int how, ...)
 {
