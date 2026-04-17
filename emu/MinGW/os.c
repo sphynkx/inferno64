@@ -1054,6 +1054,7 @@ readekbd(void)
 			return Scroll;
 		case VK_PAUSE:
 			return Pause;
+
 		case VK_TAB:
 			if(ctrl & SHIFT_PRESSED)
 				return BackTab;

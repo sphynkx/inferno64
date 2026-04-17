@@ -136,6 +136,7 @@ dis/lib/convcs
 dis/lib/crypt
 dis/lib/encoding
 dis/lib/ftree
+dis/lib/icurses
 dis/lib/ida
 dis/lib/mash
 dis/lib/print

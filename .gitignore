@@ -379,6 +379,11 @@ appl/lib/icurses/**
 !appl/lib/icurses/**/
 !appl/lib/icurses/**/.gitkeep
 
+dis/lib/icurses/**
+!dis/lib/icurses/
+!dis/lib/icurses/**/
+!dis/lib/icurses/**/.gitkeep
+
 module/icurses/**
 !module/icurses/
 !module/icurses/**/
@@ -389,6 +394,7 @@ module/icurses/**
 _wrk
 usr/sphynkx
 n/local/
+run
 *.c~
 *.c~~
 *.h~
