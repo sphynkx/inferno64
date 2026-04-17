@@ -1054,6 +1054,7 @@ readekbd(void)
 			return Scroll;
 		case VK_PAUSE:
 			return Pause;
+
 		case VK_F1:
 			return KF|1;
 		case VK_F2:
@@ -1078,6 +1079,28 @@ readekbd(void)
 			return KF|11;
 		case VK_F12:
 			return KF|12;
+
+		case VK_LSHIFT:
+			return LShift;
+		case VK_RSHIFT:
+			return RShift;
+		case VK_LCONTROL:
+			return LCtrl;
+		case VK_RCONTROL:
+			return RCtrl;
+		case VK_CAPITAL:
+			return Caps;
+		case VK_NUMLOCK:
+			return Num;
+		case VK_LMENU:
+			return LAlt;
+		case VK_RMENU:
+			return RAlt;
+		case VK_LWIN:
+			return Meta;
+		case VK_RWIN:
+			return Meta;
+
 		case VK_TAB:
 			if(ctrl & SHIFT_PRESSED)
 				return BackTab;
