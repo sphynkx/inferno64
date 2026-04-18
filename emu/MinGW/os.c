@@ -1049,11 +1049,15 @@ readekbd(void)
 		case VK_DELETE:
 			return Del;
 		case VK_PRINT:
+		case VK_SNAPSHOT: /* msys2: not work */
 			return Print;
 		case VK_SCROLL:
 			return Scroll;
 		case VK_PAUSE:
 			return Pause;
+
+		case VK_CANCEL: /* msys2: not work */
+			return Break;
 
 		case VK_F1:
 			return KF|1;
