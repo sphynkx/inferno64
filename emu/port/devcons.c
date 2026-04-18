@@ -23,6 +23,7 @@ enum
 	Qjit,
 	Qkeyboard,
 	Qekeyboard,
+	Qemouse,
 	Qkprint,
 	Qmemory,
 	Qmsec,
@@ -42,13 +43,14 @@ Dirtab contab[] =
 	"cons",		{Qcons},	0,	0666,
 	"consctl",	{Qconsctl},	0,	0222,
 	"drivers",	{Qdrivers},	0,	0444,
+	"ekeyboard",	{Qekeyboard},	0,	0666,
+	"emouse",	{Qemouse},	0,	0666,
 	"hostowner",	{Qhostowner},	0,	0644,
 	"hoststdin",	{Qhoststdin},	0,	0444,
 	"hoststdout",	{Qhoststdout},	0,	0222,
 	"hoststderr",	{Qhoststderr},	0,	0222,
 	"jit",	{Qjit},	0,	0666,
 	"keyboard",	{Qkeyboard},	0,	0666,
-	"ekeyboard",	{Qekeyboard},	0,	0666,
 	"kprint",	{Qkprint},	0,	0444,
 	"memory",	{Qmemory},	0,	0444,
 	"msec",		{Qmsec},	NUMSIZE,	0444,
@@ -64,9 +66,10 @@ Dirtab contab[] =
 
 Queue*	gkscanq;		/* Graphics keyboard raw scancodes */
 extern	char	gkscanid[];	/* name of raw scan format (if defined) */
+Queue*	ekbdq;			/* Enhanced console keyboard input */
+Queue*	emouseq;		/* Enhanced console mouse input */
 Queue*	gkbdq;			/* Graphics keyboard unprocessed input */
 Queue*	kbdq;			/* Console window unprocessed keyboard input */
-Queue*	ekbdq;			/* Enhanced console keyboard input */
 Queue*	lineq;			/* processed console input */
 
 char	*ossysname;
@@ -124,6 +127,11 @@ kbdslave(void *a)
 }
 
 #ifdef __MINGW32__
+extern int reademouse(char *buf, int n);
+extern void enableconsolemouse(void);
+extern void disableconsolemouse(void);
+
+static int mouseprocstarted;
 
 static void
 ekbdputc(int ch)
@@ -131,6 +139,14 @@ ekbdputc(int ch)
 	if(ekbdq == nil)
 		return;
 	gkbdputc(ekbdq, ch);
+}
+
+static void
+emouseput(char *buf, int n)
+{
+	if(emouseq == nil || n <= 0)
+		return;
+	qproduce(emouseq, buf, n);
 }
 
 /*
@@ -190,6 +206,22 @@ winkbdslave(void *a)
 	}
 	/* not reached */
 }
+
+void
+winmouseslave(void *a)
+{
+	char buf[128];
+	int n;
+
+	USED(a);
+	for(;;){
+		n = reademouse(buf, sizeof(buf));
+		if(n <= 0)
+			continue;
+		emouseput(buf, n);
+	}
+	/* not reached */
+}
 #endif
 
 void
@@ -242,6 +274,9 @@ consinit(void)
 	ekbdq = qopen(512, 0, nil, nil);
 	if(ekbdq == 0)
 		panic("no memory");
+	emouseq = qopen(2*1024, 0, nil, nil);
+	if(emouseq == 0)
+		panic("no memory");
 	randominit();
 }
 
@@ -291,6 +326,19 @@ consopen(Chan *c, int omode)
 		incref(&kbd.ctl);
 		break;
 
+	case Qemouse:
+#ifdef __MINGW32__
+		if(incref(&kbd.ptr) == 1)
+			enableconsolemouse();
+		if(mouseprocstarted == 0){
+			mouseprocstarted = 1;
+			kproc("mouse", winmouseslave, 0, 0);
+		}
+#else
+		incref(&kbd.ptr);
+#endif
+		break;
+
 	case Qscancode:
 		qlock(&kbd.gq);
 		if(gkscanq != nil || gkscanid[0] == '\0') {
@@ -337,6 +385,14 @@ consclose(Chan *c)
 		/* last close of control file turns off raw */
 		if(decref(&kbd.ctl) == 0)
 			kbd.raw = 0;
+		break;
+
+	case Qemouse:
+		if(decref(&kbd.ptr) == 0){
+#ifdef __MINGW32__
+			disableconsolemouse();
+#endif
+		}
 		break;
 
 	case Qscancode:
@@ -471,6 +527,9 @@ consread(Chan *c, void *va, long n, vlong offset)
 
 	case Qekeyboard:
 		return qread(ekbdq, va, n);
+
+	case Qemouse:
+		return qread(emouseq, va, n);
 
 	case Qkeyboard:
 		return qread(gkbdq, va, n);

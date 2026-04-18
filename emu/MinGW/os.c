@@ -30,6 +30,10 @@ static UINT hostoutputcp = 0;
 static int consolecpsaved = 0;
 static int consolecpchanged = 0;
 
+static DWORD mouseconsolestate = 0;
+static int mousemodesaved = 0;
+static int mousemodeactive = 0;
+
 enum {
 	ConNorm,
 	ConEsc,
@@ -1049,14 +1053,13 @@ readekbd(void)
 		case VK_DELETE:
 			return Del;
 		case VK_PRINT:
-		case VK_SNAPSHOT: /* msys2: not work */
+		case VK_SNAPSHOT:
 			return Print;
 		case VK_SCROLL:
 			return Scroll;
 		case VK_PAUSE:
 			return Pause;
-
-		case VK_CANCEL: /* msys2: not work */
+		case VK_CANCEL:
 			return Break;
 
 		case VK_F1:
@@ -1084,26 +1087,10 @@ readekbd(void)
 		case VK_F12:
 			return KF|12;
 
-		case VK_LSHIFT:
-			return LShift;
-		case VK_RSHIFT:
-			return RShift;
-		case VK_LCONTROL:
-			return LCtrl;
-		case VK_RCONTROL:
-			return RCtrl;
 		case VK_CAPITAL:
 			return Caps;
 		case VK_NUMLOCK:
 			return Num;
-		case VK_LMENU:
-			return LAlt;
-		case VK_RMENU:
-			return RAlt;
-		case VK_LWIN:
-			return Meta;
-		case VK_RWIN:
-			return Meta;
 
 		case VK_TAB:
 			if(ctrl & SHIFT_PRESSED)
@@ -1134,6 +1121,116 @@ readekbd(void)
 
 			return ch;
 		}
+	}
+}
+
+static int
+mousebuttons(DWORD state, DWORD flags)
+{
+	int b;
+	short delta;
+
+	b = 0;
+
+	if(state & FROM_LEFT_1ST_BUTTON_PRESSED)
+		b |= 1;
+	if(state & RIGHTMOST_BUTTON_PRESSED)
+		b |= 2;
+	if(state & FROM_LEFT_2ND_BUTTON_PRESSED)
+		b |= 4;
+
+	if(flags == MOUSE_WHEELED){
+		delta = (short)HIWORD(state);
+		if(delta > 0)
+			b |= 8;
+		else if(delta < 0)
+			b |= 16;
+	}
+
+	if(flags == DOUBLE_CLICK)
+		b |= 256;
+
+	return b;
+}
+
+static int
+mousemods(DWORD state)
+{
+	int m;
+
+	m = 0;
+	if(state & SHIFT_PRESSED)
+		m |= 1;
+	if(state & (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED))
+		m |= 2;
+	if(state & (LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED))
+		m |= 4;
+
+	return m;
+}
+
+void
+enableconsolemouse(void)
+{
+	DWORD mode;
+
+	if(kbdh == INVALID_HANDLE_VALUE)
+		return;
+	if(mousemodeactive)
+		return;
+	if(!GetConsoleMode(kbdh, &mode))
+		return;
+
+	mouseconsolestate = mode;
+	mousemodesaved = 1;
+
+	mode |= ENABLE_MOUSE_INPUT;
+	mode |= ENABLE_EXTENDED_FLAGS;
+	mode &= ~ENABLE_QUICK_EDIT_MODE;
+
+	SetConsoleMode(kbdh, mode);
+	mousemodeactive = 1;
+}
+
+void
+disableconsolemouse(void)
+{
+	if(kbdh == INVALID_HANDLE_VALUE)
+		return;
+	if(!mousemodeactive)
+		return;
+	if(mousemodesaved)
+		SetConsoleMode(kbdh, mouseconsolestate);
+	mousemodeactive = 0;
+}
+
+int
+reademouse(char *buf, int n)
+{
+	INPUT_RECORD rec;
+	MOUSE_EVENT_RECORD *m;
+	DWORD r;
+	int x, y, b, mods;
+
+	if(buf == nil || n <= 0)
+		return -1;
+
+	for(;;){
+		if(!ReadConsoleInput(kbdh, &rec, 1, &r))
+			return -1;
+		if(r == 0)
+			continue;
+
+		if(rec.EventType != MOUSE_EVENT)
+			continue;
+
+		m = &rec.Event.MouseEvent;
+		x = m->dwMousePosition.X;
+		y = m->dwMousePosition.Y;
+		b = mousebuttons(m->dwButtonState, m->dwEventFlags);
+		mods = mousemods(m->dwControlKeyState);
+
+		return snprint(buf, n, "m %d %d %d %d\n", x, y, b, mods);
 	}
 }
 
@@ -1245,6 +1342,8 @@ termset(void)
 static void
 termrestore(void)
 {
+	disableconsolemouse();
+
 	if(kbdh != INVALID_HANDLE_VALUE)
 		SetConsoleMode(kbdh, consolestate);
 
