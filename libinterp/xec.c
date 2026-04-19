@@ -834,7 +834,7 @@ OP(mcall)
 	o = W(m);
 	if(o >= 0){
 		if(o >= ml->nlinks)
-			error("invalid mcall");
+			errorf("invalid mcall index %d (nlinks %d)", o, ml->nlinks);
 		l = &ml->links[o].u;
 		DBG("\t\tlink o %d %s\n",
 			o, ml->links[o].name);
