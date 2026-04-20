@@ -1629,7 +1629,7 @@ indsascom(Src *src, Node *nto, Node *n)
 void
 callcom(Src *src, int op, Node *n, Node *ret)
 {
-	Node frame, tadd, toff, pass, *a, *mod, *ind, *nfn, *args, tmod, tind, *tn;
+	Node frame, tadd, toff, pass, tret, *callret, *a, *mod, *ind, *nfn, *args, tmod, tind, *tn;
 	Inst *in,*p;
 	Decl *d, *callee;
 	long off;
@@ -1664,6 +1664,29 @@ callcom(Src *src, int op, Node *n, Node *ret)
 	if(nfn->ty->varargs){
 		nfn->decl = dupdecl(nfn->right->decl);
 		nfn->decl->desc = gendesc(nfn->right->decl, idoffsets(nfn->ty->ids, MaxTemp, MaxAlign), nfn->ty->ids);
+	}
+	callret = ret;
+	tret.decl = nil;
+	if(ret != nil
+	&& tmustzero(nfn->ty->tof)
+	&& ret->op == Oind
+	&& ret->left != nil
+	&& ret->left->op == Oname
+	&& ret->left->decl != nil
+	&& ret->left->decl->sym != nil
+	&& strcmp(ret->left->decl->sym->name, ".ret") == 0){
+		/*
+		 * Direct-return wrappers forward their caller's destination address
+		 * through .ret using ILEA.  For pointer / pointer-containing results
+		 * the nested callee then stores with MOVP/MOVMP, which destroys the
+		 * old destination contents first.  If the outer caller's destination
+		 * has not been initialised yet, that destroy walks garbage.  Route the
+		 * nested call through a normal compiler temp (which is frame-managed
+		 * and nil/zero initialised) and then move the temp to the real return
+		 * destination after the call.
+		 */
+		talloc(&tret, nfn->ty->tof, nil);
+		callret = &tret;
 	}
 
 	talloc(&frame, tint, nil);
@@ -1751,11 +1774,11 @@ callcom(Src *src, int op, Node *n, Node *ret)
 	/*
 	 * pass return value
 	 */
-	if(ret != nil){
+	if(callret != nil){
 		toff.val = REGRET*IBY2WD;
 		pass.ty = nfn->ty->tof;
-		p = genrawop(src, ILEA, ret, nil, &pass);
-		p->m.offset = ret->ty->size;	/* for optimizer */
+		p = genrawop(src, ILEA, callret, nil, &pass);
+		p->m.offset = callret->ty->size;	/* for optimizer */
 	}
 
 	/*
@@ -1780,6 +1803,10 @@ callcom(Src *src, int op, Node *n, Node *ret)
 		in = genrawop(src, iop, &frame, nil, nil);
 		in->d.decl = nfn->decl;
 		in->dm = Apc;
+	}
+	if(tret.decl != nil){
+		genmove(src, Mas, nfn->ty->tof, &tret, ret);
+		tfree(&tret);
 	}
 	tfree(&frame);
 }

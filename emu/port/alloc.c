@@ -693,7 +693,7 @@ krealloc(void *v, size_t size)
 }
 
 void
-setmalloctag(void *v, ulong pc)
+setmalloctag(void *v, uintptr pc)
 {
 	Bhdr *b;
 
@@ -703,7 +703,7 @@ setmalloctag(void *v, ulong pc)
 	}
 }
 
-ulong
+uintptr
 getmalloctag(void *v)
 {
 	Bhdr *b;
@@ -715,7 +715,7 @@ getmalloctag(void *v)
 }
 
 void
-setrealloctag(void *v, ulong  pc)
+setrealloctag(void *v, uintptr pc)
 {
 	Bhdr *b;
 
@@ -725,7 +725,7 @@ setrealloctag(void *v, ulong  pc)
 	}
 }
 
-ulong
+uintptr
 getrealloctag(void *v)
 {
 	Bhdr *b;

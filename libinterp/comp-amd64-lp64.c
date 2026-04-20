@@ -823,7 +823,7 @@ commframe(Inst *i)
 	uchar *punt, *mlnil;
 
 	opwld(i, Oldw, RAX);
-	cmpl(RAX, (ulong)H);
+	cmpl(RAX, (uintptr)H);
 	gen2(Ojeqb, 0);
 	mlnil = code - 1;
 	if((i->add&ARM) == AXIMM) {
@@ -872,7 +872,7 @@ commcall(Inst *i)
 	modrm(Oldw, O(REG, M), RTMP, RTA);	// MOVL R.M, RTA
 	modrm(Ostw, O(Frame, mr), RCX, RTA);	// MOVL RTA, mr(CX) 	f->mr = R.M
 	opwst(i, Oldw, RTA);			// MOVL ml, RTA
-	cmpl(RTA, (ulong)H);
+	cmpl(RTA, (uintptr)H);
 	gen2(Ojeqb, 0);
 	mlnil = code - 1;
 	if((i->add&ARM) == AXIMM)
@@ -1175,7 +1175,7 @@ comp(Inst *i)
 		if(i->op == IHEADP)
 			modrm(Oldw, OA(List, data), RBX, RBX);
 	movp:
-		cmpl(RBX, (ulong)H);
+		cmpl(RBX, (uintptr)H);
 		gen2(Ojeqb, 0x05);
 		rbra(macro[MacCOLR], Ocall);
 		opwst(i, Oldw, RAX);
@@ -1185,7 +1185,7 @@ comp(Inst *i)
 	case ILENA:
 		opwld(i, Oldw, RBX);
 		con(0, RAX);
-		cmpl(RBX, (ulong)H);
+		cmpl(RBX, (uintptr)H);
 		gen2(Ojeqb, 0x03);
 		modrmw(Oldw, O(Array, len), RBX, RAX);
 		opwstw(i, Ostw, RAX);
@@ -1193,7 +1193,7 @@ comp(Inst *i)
 	case ILENC:
 		opwld(i, Oldw, RBX);
 		con(0, RAX);
-		cmpl(RBX, (ulong)H);
+		cmpl(RBX, (uintptr)H);
 		gen2(Ojeqb, 0x9);
 		modrmw(Oldw, O(String, len), RBX, RAX);
 		cmpl(RAX, 0);
@@ -1204,7 +1204,7 @@ comp(Inst *i)
 	case ILENL:
 		con(0, RAX);
 		opwld(i, Oldw, RBX);
-		cmpl(RBX, (ulong)H);
+		cmpl(RBX, (uintptr)H);
 		gen2(Ojeqb, 0x07);
 		modrm(Oldw, O(List, tail), RBX, RBX);
 		gen2(Oincrm, (3<<6)|(0<<3)|RAX);	
@@ -1669,7 +1669,7 @@ maccase(void)
 static void
 macfrp(void)
 {
-	cmpl(RAX, (ulong)H);			// CMPL AX, $H
+	cmpl(RAX, (uintptr)H);			// CMPL AX, $H
 	gen2(Ojneb, 0x01);			// JNE	.+1
 	genb(Oret);				// RET
 	modrm(0x83, O(Heap, ref)-sizeof(Heap), RAX, 7);
@@ -1787,7 +1787,7 @@ macmcal(void)
 {
 	uchar *label, *mlnil, *interp;
 
-	cmpl(RAX, (ulong)H);
+	cmpl(RAX, (uintptr)H);
 	gen2(Ojeqb, 0);
 	mlnil = code - 1;
 	modrm(0x83, O(Modlink, prog), RTA, 7);	// CMPL $0, ml->prog
@@ -1912,7 +1912,7 @@ comi(Type *t)
 {
 	int i, j, m, c;
 
-	con((ulong)H, RAX);
+	con((uintptr)H, RAX);
 	for(i = 0; i < t->np; i++) {
 		c = t->map[i];
 		j = i<<6;

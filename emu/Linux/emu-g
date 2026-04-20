@@ -1,5 +1,6 @@
 env
 	X11LIBS=
+	PULSELIBS=
 dev
 	root
 	cons

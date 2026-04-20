@@ -11,7 +11,7 @@ void	(*coherence)(void) = nil;	/* used by port/lock.c and port/win-x11a.c */
 int	exdebug = 0;
 int		rebootargc = 0;
 char**		rebootargv;
-//extern char	gkscanid[32] = "";
+char	gkscanid[32] = "";
 static	char	*imod = "/dis/emuinit.dis";
 extern	char*	hosttype;
 extern char*	tkfont;	/* for libtk/utils.c */

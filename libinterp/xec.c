@@ -833,6 +833,8 @@ OP(mcall)
 		showframe((void *)f, f->t);
 	o = W(m);
 	if(o >= 0){
+		if(o >= ml->nlinks)
+			errorf("invalid mcall index %d (nlinks %d)", o, ml->nlinks);
 		l = &ml->links[o].u;
 		DBG("\t\tlink o %d %s\n",
 			o, ml->links[o].name);
