@@ -113,6 +113,13 @@ extend(void)
 	R.SP = ns->reg.tos.fu + t->size;
 	if (t->np)
 		initmem(t, f);
+	/*
+	 * Always initialise the return slot to the nil sentinel H.
+	 * See the matching comment in OP(frame) / OP(mframe) in xec.c
+	 * for the full explanation.  This covers the stack-overflow path
+	 * for both IFRAME and IMFRAME.
+	 */
+	((WORD**)f)[REGRET] = H;
 }
 
 void

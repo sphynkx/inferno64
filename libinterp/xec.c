@@ -371,6 +371,18 @@ OP(frame)
 		f, t, t->size, R.SP);
 	if (t->np)
 		initmem(t, f);
+	/*
+	 * The Limbo compiler always declares the return slot (.ret) with
+	 * type int, so the frame descriptor never marks it as a pointer
+	 * even when the function returns a pointer type (array, string,
+	 * list, …).  initmem therefore leaves the slot as uninitialised
+	 * stack garbage.  When the callee later executes MOVP to store a
+	 * pointer return value it first calls destroy() on the current
+	 * slot contents; if those contents are garbage the VM segfaults.
+	 * Always pre-initialise the return slot to the nil sentinel H so
+	 * that destroy() treats it as a no-op.
+	 */
+	((WORD**)f)[REGRET] = H;
 	T(d) = f;
 }
 /* from the module link loaded at src1 using the index src2
@@ -400,6 +412,10 @@ OP(mframe)
 	if(nsp >= R.TS) {
 		R.s = t;
 		extend();
+		/* initialise return slot in extended frame (extend() leaves
+		 * only pointer-map slots initialised via initmem; the return
+		 * slot is never in that map – see comment in OP(frame) above) */
+		((WORD**)R.s)[REGRET] = H;
 		T(d) = R.s;
 		DBG("\t\textended frame at *R.d 0x%p\n", *(intptr**)R.d);
 		return;
@@ -412,6 +428,8 @@ OP(mframe)
 		f, t, t->size, R.SP);
 	if (t->np)
 		initmem(t, f);
+	/* Always initialise the return slot to H; see comment in OP(frame). */
+	((WORD**)f)[REGRET] = H;
 	T(d) = f;
 	DBG("\t\tframe at *R.d 0x%p is\n", *(intptr**)R.d);
 	if(0) showframe((void *)f, t);
