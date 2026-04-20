@@ -57,7 +57,7 @@ char	*argv0 = "inferno";
 static	ulong	*data;
 
 extern	DWORD	PlatformId;
-extern char*	gkscanid = "emu_win32vk";
+extern char	gkscanid[];
 
 int WINAPI
 WinMain(HINSTANCE winst, HINSTANCE wprevinst, LPSTR cmdline, int wcmdshow)
@@ -65,6 +65,7 @@ WinMain(HINSTANCE winst, HINSTANCE wprevinst, LPSTR cmdline, int wcmdshow)
 	inst = winst;
 	previnst = wprevinst;
 	cmdshow = wcmdshow;
+	strncpy(gkscanid, "emu_win32vk", 32);
 
 	/* cmdline passed into WinMain does not contain name of executable.
 	 * The globals __argc and __argv to include this info - like UNIX
