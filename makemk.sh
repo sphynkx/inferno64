@@ -41,7 +41,7 @@ error() {
 }
 
 ofiles() {
-	echo $* | sed 's/\.c/.o/g'
+	echo $* | sed 's/\.c/.o/g; s/\.S/.o/g; s/\.s/.o/g'
 }
 
 p() {
@@ -73,12 +73,22 @@ $RANLIB $PLAT/lib/libbio.a || error libbio ranlib failed
 # lib9
 cd $ROOT/lib9 || error cannot find lib9 directory
 CREATEFILE=create-$SYSTYPE.c
+LIB9SYSFILES="dirstat-$SYSTYPE.c rerrstr.c errstr-$SYSTYPE.c getuser-$SYSTYPE.c"
 case "$SYSTYPE" in
 posix)
 	CREATEFILE=create.c
+	LIB9SYSFILES="$LIB9SYSFILES getcallerpc-$SYSTARG-$OBJTYPE.c setfcr-$SYSTARG-$OBJTYPE.S getwd-$SYSTYPE.c sbrk-$SYSTYPE.c isnan-$SYSTYPE.c"
+	;;
+Nt)
+	LIB9SYSFILES="$LIB9SYSFILES getwd-$SYSTYPE.c isnan-posix.c"
+	case "$SYSTARG-$OBJTYPE" in
+	MinGW-amd64)
+		LIB9SYSFILES="$LIB9SYSFILES getcallerpc-$SYSTARG-$OBJTYPE.c"
+		;;
+	esac
 	;;
 esac
-CFILES="dirstat-$SYSTYPE.c rerrstr.c errstr-$SYSTYPE.c getuser-$SYSTYPE.c $CREATEFILE"	# system specific
+CFILES="$LIB9SYSFILES $CREATEFILE"	# system specific
 CFILES="$CFILES argv0.c charstod.c cistrcmp.c cistrncmp.c cistrstr.c cleanname.c dirwstat.c nulldir.c readn.c sysfatal.c tokenize.c u16.c u32.c u64.c *print*.c *fmt*.c exits.c getfields.c pow10.c print.c qsort.c rune.c runestrlen.c seek.c strdup.c strtoll.c utflen.c utfrrune.c utfrune.c utf*.c *str*cpy*.c"
 $CC $CFILES || error lib9 compilation failed
 $AR $PLAT/lib/lib9.a `ofiles $CFILES` || error lib9 ar failed

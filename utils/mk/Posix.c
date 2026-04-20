@@ -39,21 +39,25 @@ readenv(void)
 void
 exportenv(Envy *e)
 {
-	int i;
+	int i, n;
 	char **p;
 	char *values;
 
 	p = 0;
+	n = 0;
 	for(i = 0; e->name; e++, i++) {
-		p = (char**) Realloc(p, (i+2)*sizeof(char*));
+		if(strcmp(e->name, "BASH_ENV") == 0 || strcmp(e->name, "ENV") == 0)
+			continue;
+		p = (char**) Realloc(p, (n+2)*sizeof(char*));
 		if (e->values)
 			values = wtos(e->values, IWS);
 		else
 			values = "";
-		p[i] = malloc(strlen(e->name) + strlen(values) + 2);
-		sprint(p[i], "%s=%s", e->name,  values);
+		p[n] = malloc(strlen(e->name) + strlen(values) + 2);
+		sprint(p[n], "%s=%s", e->name,  values);
+		n++;
 	}
-	p[i] = 0;
+	p[n] = 0;
 	environ = p;
 }
 
