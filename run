@@ -1,0 +1,4 @@
+#!/usr/bin/sh
+export MKSH=/usr/bin/bash.exe
+export PATH=$PATH:/opt/inferno64/MinGW/amd64/bin/
+export ROOT=/opt/inferno64

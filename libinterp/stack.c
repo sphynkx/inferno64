@@ -113,6 +113,7 @@ extend(void)
 	R.SP = ns->reg.tos.fu + t->size;
 	if (t->np)
 		initmem(t, f);
+	((WORD**)f)[REGRET] = H;
 }
 
 void

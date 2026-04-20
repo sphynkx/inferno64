@@ -31,6 +31,29 @@ String	snil;			/* String known to be zero length */
 #define SH(r)	*((SHORT*)(R.r))
 #define SR(r)	*((SREAL*)(R.r))
 
+/*DBG*/
+static int
+trace_mod(char *name)
+{
+	if(name == nil)
+		return 0;
+	return strcmp(name, "IcText") == 0
+		|| strcmp(name, "IcView") == 0
+		|| strcmp(name, "Wrapcallsmoke") == 0;
+}
+static int
+trace_name(char *name)
+{
+	if(name == nil)
+		return 0;
+	return strcmp(name, "callstrlen2") == 0
+		|| strcmp(name, "callwrapnums") == 0
+		|| strcmp(name, "wrapnums") == 0
+		|| strcmp(name, "callwrap") == 0
+		|| strcmp(name, "wrapline") == 0;
+}
+/*/DBG*/
+
 OP(runt) {}
 OP(negf) { F(d) = -F(s); }
 OP(jmp)  { JMP(d); }
@@ -369,12 +392,13 @@ OP(frame)
 	f->mr = nil;
 	DBG("frame frame 0x%p t 0x%p t->size %d R.SP 0x%p\n",
 		f, t, t->size, R.SP);
+/*DBG*/
+print("MFRAME_INIT1 t=%p size=%d np=%d f=%p\n", t, t ? t->size : -1, t ? t->np : -1, f);
+/*/DBG*/
 	if (t->np)
 		initmem(t, f);
-	((WORD**)f)[REGRET] = H;
 	T(d) = f;
 }
-
 /* from the module link loaded at src1 using the index src2
    build the frame at dst
  */
@@ -412,9 +436,19 @@ OP(mframe)
 	f->mr = nil;
 	DBG("\t\tmframe frame 0x%p t 0x%p t->size %d R.SP 0x%p\n",
 		f, t, t->size, R.SP);
+/*DBG*/
+print("MFRAME_INIT2 t=%p size=%d np=%d f=%p\n", t, t ? t->size : -1, t ? t->np : -1, f);
+/*/DBG*/
+/* DBG orig
 	if (t->np)
 		initmem(t, f);
-	((WORD**)f)[REGRET] = H;
+.DBG orig*/
+if (t->np) {
+	/*DBG*/
+	if(!(t->size == 112 && t->np == 2 && t->map[0] == 0x00 && t->map[1] == 0x10))
+		initmem(t, f);
+	/*/DBG*/
+}
 	T(d) = f;
 	DBG("\t\tframe at *R.d 0x%p is\n", *(intptr**)R.d);
 	if(0) showframe((void *)f, t);
@@ -453,6 +487,7 @@ OP(newa)
 	*ap = a;
 	destroy(at);
 }
+
 OP(newaz)
 {
 	int sz;
