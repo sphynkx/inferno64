@@ -8,3 +8,4 @@ TARGFILES=\
 	#lock-Nt-386.$O\
 	pread-Nt.$O\
 	isnan-posix.$O\
+	create-Nt.$O\
