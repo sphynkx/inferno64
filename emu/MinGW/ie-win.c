@@ -61,7 +61,7 @@ static	int		attached;
 static	ulong	*data;
 
 extern	DWORD	PlatformId;
-extern char	gkscanid[];
+char*	gkscanid = "emu_win32vk";
 
 extern int cflag;
 Plugin *plugin = NULL;
@@ -97,7 +97,6 @@ WinMain(HINSTANCE winst, HINSTANCE wprevinst, LPSTR cmdline, int wcmdshow)
 	char iname[16];
 	inst = winst;
 	previnst = wprevinst;
-	strncpy(gkscanid, "emu_win32vk", 32);
 	sprint(iname, "%uX", pid);
 	sharedmem = OpenFileMapping(FILE_MAP_WRITE, FALSE, iname);
 	if (sharedmem != NULL)
