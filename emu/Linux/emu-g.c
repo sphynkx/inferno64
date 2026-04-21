@@ -57,6 +57,9 @@ Dev* devtab[]={
 void links(void){
 }
 
+char* tkfont;
+int tkstylus;
+
 extern void sysmodinit(void);
 extern void mathmodinit(void);
 extern void srvmodinit(void);

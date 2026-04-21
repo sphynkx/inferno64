@@ -2,9 +2,9 @@
 
 LIB=libinterp.a
 
-COMPOBJ=comp-$OBJTYPE.$O
-if($SYSTARG == MinGW && $OBJTYPE == amd64)
-	COMPOBJ=comp-$OBJTYPE-lp64.$O
+COMPOBJ=comp-$OBJTYPE$AMD64BACKENDSUFFIX.$O
+
+GRAPHICSOFILES=draw.$O heapaudit.$O tk.$O
 
 OFILES=\
 	alt.$O\
@@ -12,11 +12,10 @@ OFILES=\
 	conv.$O\
 	crypt.$O\
 	dec.$O\
-	draw.$O\
+	$GRAPHICSOFILES\
 	gc.$O\
 	geom.$O\
 	heap.$O\
-	heapaudit.$O\
 	ipint.$O\
 	link.$O\
 	load.$O\
@@ -27,7 +26,6 @@ OFILES=\
 	runt.$O\
 	sign.$O\
 	stack.$O\
-	tk.$O\
 	validstk.$O\
 	xec.$O\
 	das-$OBJTYPE.$O\
