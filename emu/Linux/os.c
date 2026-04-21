@@ -30,6 +30,21 @@ enum
 	X11STACK=	256*1024
 };
 char *hosttype = "Linux";
+#if defined(__x86_64__)
+char *cputype = "amd64";
+#elif defined(__aarch64__)
+char *cputype = "arm64";
+#elif defined(__i386__)
+char *cputype = "386";
+#elif defined(__arm__)
+char *cputype = "arm";
+#elif defined(__mips__)
+char *cputype = "mips";
+#elif defined(__powerpc__) || defined(__powerpc64__)
+char *cputype = "power";
+#else
+char *cputype;
+#endif
 
 typedef sem_t	Sem;
 

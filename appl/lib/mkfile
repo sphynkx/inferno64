@@ -6,6 +6,7 @@ DIRS=\
 	ecmascript\
 	encoding\
 	ida\
+	icurses\
 	print\
 	spki\
 	strokes\

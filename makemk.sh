@@ -9,12 +9,23 @@
 # change these defines as appropriate here or in mkconfig
 # ROOT should be the root of the Inferno tree
 ROOT=${ROOT:-~/inferno64}
-SYSTARG=MinGW
-OBJTYPE=${objtype:-arm64}
-SYSTYPE=Nt
+SYSTARG=${SYSTARG:-MinGW}
+OBJTYPE=${objtype:-${OBJTYPE:-arm64}}
+SYSTYPE=${SYSTYPE:-}
 
 # if you have already changed mkconfig from the distribution, we'll use the definitions from that
 grep -s 'SYSTARG=Plan9' mkconfig || . ./mkconfig
+
+if [ -z "$SYSTYPE" ]; then
+	case "$SYSTARG" in
+	MinGW|Nt)
+		SYSTYPE=Nt
+		;;
+	*)
+		SYSTYPE=posix
+		;;
+	esac
+fi
 
 PLAT=$ROOT/$SYSTARG/$OBJTYPE
 
@@ -30,7 +41,7 @@ error() {
 }
 
 ofiles() {
-	echo $* | sed 's/\.c/.o/g'
+	echo $* | sed 's/\.c/.o/g; s/\.S/.o/g; s/\.s/.o/g'
 }
 
 p() {
@@ -61,8 +72,24 @@ $RANLIB $PLAT/lib/libbio.a || error libbio ranlib failed
 
 # lib9
 cd $ROOT/lib9 || error cannot find lib9 directory
-CFILES="dirstat-$SYSTYPE.c rerrstr.c errstr-$SYSTYPE.c getuser-$SYSTYPE.c create-$SYSTYPE.c"	# system specific
-CFILES="$CFILES charstod.c cleanname.c dirwstat.c *print*.c *fmt*.c exits.c getfields.c  pow10.c print.c qsort.c rune.c runestrlen.c seek.c strdup.c strtoll.c utflen.c utfrrune.c utfrune.c utf*.c *str*cpy*.c"
+CREATEFILE=create-$SYSTYPE.c
+LIB9SYSFILES="dirstat-$SYSTYPE.c rerrstr.c errstr-$SYSTYPE.c getuser-$SYSTYPE.c"
+case "$SYSTYPE" in
+posix)
+	CREATEFILE=create.c
+	LIB9SYSFILES="$LIB9SYSFILES getcallerpc-$SYSTARG-$OBJTYPE.c setfcr-$SYSTARG-$OBJTYPE.S getwd-$SYSTYPE.c sbrk-$SYSTYPE.c isnan-$SYSTYPE.c"
+	;;
+Nt)
+	LIB9SYSFILES="$LIB9SYSFILES getwd-$SYSTYPE.c isnan-posix.c"
+	case "$SYSTARG-$OBJTYPE" in
+	MinGW-amd64)
+		LIB9SYSFILES="$LIB9SYSFILES getcallerpc-$SYSTARG-$OBJTYPE.c"
+		;;
+	esac
+	;;
+esac
+CFILES="$LIB9SYSFILES $CREATEFILE"	# system specific
+CFILES="$CFILES argv0.c charstod.c cistrcmp.c cistrncmp.c cistrstr.c cleanname.c dirwstat.c nulldir.c readn.c sysfatal.c tokenize.c u16.c u32.c u64.c *print*.c *fmt*.c exits.c getfields.c pow10.c print.c qsort.c rune.c runestrlen.c seek.c strdup.c strtoll.c utflen.c utfrrune.c utfrune.c utf*.c *str*cpy*.c"
 $CC $CFILES || error lib9 compilation failed
 $AR $PLAT/lib/lib9.a `ofiles $CFILES` || error lib9 ar failed
 $RANLIB $PLAT/lib/lib9.a || error lib9 ranlib failed
@@ -76,7 +103,13 @@ $RANLIB $PLAT/lib/liballoc.a || error liballoc randlib failed
 
 # mk itself
 cd $ROOT/utils/mk
-CFILES="Nt.c sh.c"	# system specific
+MKSYS=Nt.c
+case "$SYSTYPE" in
+posix)
+	MKSYS=Posix.c
+	;;
+esac
+CFILES="$MKSYS sh.c"	# system specific
 CFILES="$CFILES arc.c archive.c bufblock.c env.c file.c graph.c job.c lex.c main.c match.c mk.c parse.c recipe.c rule.c run.c shprint.c symtab.c var.c varsub.c word.c"
 $CC $CFILES || error mk compilation failed
 $LD -o mk `ofiles $CFILES` $PLAT/lib/libregexp.a $PLAT/lib/libbio.a $PLAT/lib/lib9.a $PLAT/lib/liballoc.a || error mk link failed

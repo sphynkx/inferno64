@@ -2,9 +2,13 @@
 
 LIB=libinterp.a
 
+COMPOBJ=comp-$OBJTYPE.$O
+if($SYSTARG == MinGW && $OBJTYPE == amd64)
+	COMPOBJ=comp-$OBJTYPE-lp64.$O
+
 OFILES=\
 	alt.$O\
-	comp-$OBJTYPE.$O\
+	$COMPOBJ\
 	conv.$O\
 	crypt.$O\
 	dec.$O\

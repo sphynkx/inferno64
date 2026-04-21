@@ -10,24 +10,35 @@ char 	*shellname =	"sh";
 
 extern char **environ;
 
+static int
+badenvname(char *name)
+{
+	return *shname(name) != '\0'
+		|| strcmp(name, "BASH_ENV") == 0
+		|| strcmp(name, "ENV") == 0
+		|| strncmp(name, "BASH_FUNC_", 10) == 0;
+}
+
 void
 readenv(void)
 {
-	char **p, *s;
+	char **p, *eq, *name;
 	Word *w;
 
 	for(p = environ; *p; p++){
-		s = shname(*p);
-		if(*s == '=') {
-			*s = 0;
-			w = newword(s+1);
-		} else
-			w = newword("");
-		if (symlook(*p, S_INTERNAL, 0))
+		eq = shname(*p);
+		if(*eq != '=')
 			continue;
-		s = strdup(*p);
-		setvar(s, (void *)w);
-		symlook(s, S_EXPORTED, (void*)"")->value = (void*)"";
+		*eq = 0;
+		if(badenvname(*p) || symlook(*p, S_INTERNAL, 0)){
+			*eq = '=';
+			continue;
+		}
+		w = newword(eq+1);
+		name = strdup(*p);
+		*eq = '=';
+		setvar(name, (void *)w);
+		symlook(name, S_EXPORTED, (void*)"")->value = (void*)"";
 	}
 }
 
@@ -39,21 +50,25 @@ readenv(void)
 void
 exportenv(Envy *e)
 {
-	int i;
+	int i, n;
 	char **p;
 	char *values;
 
 	p = 0;
+	n = 0;
 	for(i = 0; e->name; e++, i++) {
-		p = (char**) Realloc(p, (i+2)*sizeof(char*));
+		if(badenvname(e->name))
+			continue;
+		p = (char**) Realloc(p, (n+2)*sizeof(char*));
 		if (e->values)
 			values = wtos(e->values, IWS);
 		else
 			values = "";
-		p[i] = malloc(strlen(e->name) + strlen(values) + 2);
-		sprint(p[i], "%s=%s", e->name,  values);
+		p[n] = malloc(strlen(e->name) + strlen(values) + 2);
+		sprint(p[n], "%s=%s", e->name,  values);
+		n++;
 	}
-	p[i] = 0;
+	p[n] = 0;
 	environ = p;
 }
 

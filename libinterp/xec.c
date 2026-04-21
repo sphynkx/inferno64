@@ -447,6 +447,8 @@ OP(newa)
 
 	ap = R.d;
 	at = *ap;
+	print("DEBUG newa sz=%d t->size=%lld dst=%p old=%p fp=%p sp=%p\n",
+		sz, t->size, ap, at, R.FP, R.SP);
 	*ap = a;
 	destroy(at);
 }
@@ -833,6 +835,8 @@ OP(mcall)
 		showframe((void *)f, f->t);
 	o = W(m);
 	if(o >= 0){
+		if(o >= ml->nlinks)
+			errorf("invalid mcall index %d (nlinks %d)", o, ml->nlinks);
 		l = &ml->links[o].u;
 		DBG("\t\tlink o %d %s\n",
 			o, ml->links[o].name);

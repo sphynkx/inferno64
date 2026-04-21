@@ -46,7 +46,7 @@ linkm(Module *m, Modlink *ml, int i, Import *ldt)
 			break;
 		}
 
-	if(l == nil) {
+	if(l == nil || (l != nil && l->name == nil)) {
 		snprint(e, sizeof(e), "link failed fn %s->%s() not implemented",
 			m->name, ldt->name);
 		goto bad;
