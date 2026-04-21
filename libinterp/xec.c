@@ -447,6 +447,8 @@ OP(newa)
 
 	ap = R.d;
 	at = *ap;
+	print("DEBUG newa sz=%d t->size=%lld dst=%p old=%p fp=%p sp=%p\n",
+		sz, t->size, ap, at, R.FP, R.SP);
 	*ap = a;
 	destroy(at);
 }
