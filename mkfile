@@ -38,8 +38,8 @@ foo:QV:
 
 all:V:		all-$HOSTMODEL
 clean:V:	clean-$HOSTMODEL
-install:V:	install-$HOSTMODEL
-installall:V:	installall-$HOSTMODEL
+install:V:	mkdirs install-$HOSTMODEL
+installall:V:	mkdirs installall-$HOSTMODEL
 #emu:V:	emu/all-$HOSTMODEL
 #emuinstall:V:	emu/install-$HOSTMODEL
 #emuclean:V:	emu/clean-$HOSTMODEL
@@ -114,4 +114,3 @@ mkdirs-sh:V:
 
 mkdirs-nt:V:
 	mkdir -p `{cmd /c type lib\emptydirs}
-
