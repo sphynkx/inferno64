@@ -193,11 +193,12 @@ init(drawcontext: ref Draw->Context, argv: list of string)
 		setstatus(ctxt, status);
 	}
 	if (argv == nil) {
-		if (isconsole(sys->fildes(0)))
+		stdinconsole := isconsole(sys->fildes(0));
+		if (stdinconsole)
 			interactive |= ctxt.INTERACTIVE;
 		ctxt.setoptions(interactive, 1);
 
-		if((interactive & ctxt.INTERACTIVE) != 0 && hasekeyboard())
+		if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && hasekeyboard())
 			runekeyboard(ctxt);
 		else
 			runfile(ctxt, sys->fildes(0), "stdin", nil);
@@ -457,7 +458,7 @@ runfile(ctxt: ref Context, fd: ref Sys->FD, path: string, args: list of ref List
 			if (interactive) {
 				prompt = list2stringlist(ctxt.get("prompt"));
 				if (prompt == nil)
-					prompt = "; " :: "" :: nil;
+					prompt = "esh; " :: "" :: nil;
 	
 				sys->fprint(stderr(), "%s", hd prompt);
 				if (tl prompt == nil) {

@@ -396,3 +396,5 @@ run
 *.b~~
 mkfile~
 mkfile~~
+mkconfig~
+mkconfig~~

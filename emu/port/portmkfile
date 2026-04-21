@@ -51,12 +51,12 @@ i$CONF.acid:	i$CONF
 lib%.a:V:	$SHELLTYPE-lib%.a
 
 rc-lib%.a nt-lib%.a:VQ:
-		echo '@{builtin cd' $ROOT/lib$stem '; mk $MKFLAGS SHELLTYPE=$SHELLTYPE SYSTARG=$SYSTARG OBJTYPE=$OBJTYPE install}'
-		@{builtin cd $ROOT/lib$stem; mk $MKFLAGS 'SHELLTYPE='$SHELLTYPE 'SYSTARG='$SYSTARG 'OBJTYPE='$OBJTYPE install}
+		echo '@{builtin cd' $ROOT/lib$stem '; if(test '$stem' = interp) rm -f '$ROOT/$SYSTARG/$OBJTYPE/lib/libinterp.a' '$ROOT/libinterp/.conf-*'; mk $MKFLAGS SHELLTYPE=$SHELLTYPE SYSTARG=$SYSTARG OBJTYPE=$OBJTYPE CONF=$CONF install}'
+		@{builtin cd $ROOT/lib$stem; mk $MKFLAGS 'SHELLTYPE='$SHELLTYPE 'SYSTARG='$SYSTARG 'OBJTYPE='$OBJTYPE 'CONF='$CONF install}
 
 sh-lib%.a:VQ:
-		echo "(cd $ROOT/lib$stem ; mk $MKFLAGS SHELLTYPE=$SHELLTYPE SYSTARG=$SYSTARG OBJTYPE=$OBJTYPE install)"
-		(cd $ROOT/lib$stem; mk $MKFLAGS 'SHELLTYPE='$SHELLTYPE 'SYSTARG='$SYSTARG 'OBJTYPE='$OBJTYPE install)
+		echo "(cd $ROOT/lib$stem ; if test $stem = interp; then rm -f $ROOT/$SYSTARG/$OBJTYPE/lib/libinterp.a $ROOT/libinterp/.conf-*; fi; if test $stem = interp && test $CONF = emu-g; then mk $MKFLAGS SHELLTYPE=$SHELLTYPE SYSTARG=$SYSTARG OBJTYPE=$OBJTYPE CONF=$CONF GRAPHICSOFILES= install; else mk $MKFLAGS SHELLTYPE=$SHELLTYPE SYSTARG=$SYSTARG OBJTYPE=$OBJTYPE CONF=$CONF install; fi)"
+		(cd $ROOT/lib$stem; if test $stem = interp; then rm -f $ROOT/$SYSTARG/$OBJTYPE/lib/libinterp.a $ROOT/libinterp/.conf-*; fi; if test $stem = interp && test $CONF = emu-g; then mk $MKFLAGS 'SHELLTYPE='$SHELLTYPE 'SYSTARG='$SYSTARG 'OBJTYPE='$OBJTYPE 'CONF='$CONF 'GRAPHICSOFILES=' install; else mk $MKFLAGS 'SHELLTYPE='$SHELLTYPE 'SYSTARG='$SYSTARG 'OBJTYPE='$OBJTYPE 'CONF='$CONF install; fi)
 
 %-rc %-nt:V:
 		for(i in $CONFLIST)

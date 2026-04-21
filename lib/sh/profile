@@ -1,5 +1,5 @@
 # sh initialisation here
-#load std
+load std
 
 user = `{cat /dev/user}
 home = /usr/^$user
