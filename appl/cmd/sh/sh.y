@@ -254,10 +254,14 @@ loop: while (argv != nil && hd argv != nil && (hd argv)[0] == '-') {
 	if (argv == nil) {
 #		if (opts.lflag)
 #			runscript(ctxt, SHELLRC, nil, 0);
-		if (isconsole(sys->fildes(0)))
+		stdinconsole := isconsole(sys->fildes(0));
+		if (stdinconsole)
 			interactive |= ctxt.INTERACTIVE;
 		ctxt.setoptions(interactive, 1);
-		runfile(ctxt, sys->fildes(0), "stdin", nil);
+		if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && hasekeyboard())
+			runekeyboard(ctxt);
+		else
+			runfile(ctxt, sys->fildes(0), "stdin", nil);
 	} else {
 		ctxt.setoptions(interactive, 1);
 		runscript(ctxt, hd argv, stringlist2list(tl argv), 1);
