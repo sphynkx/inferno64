@@ -1,8 +1,13 @@
 # sh initialisation here
 load std
 
+host = `{cat /env/emuhost}
 user = `{cat /dev/user}
 home = /usr/^$user
+and {~ $host Linux} {
+	user = inferno
+	home = /usr/inferno
+}
 bind -c '#U*'^$emuwdir /n/local
 bind -a '#U*'/home /usr
 cd /n/local
