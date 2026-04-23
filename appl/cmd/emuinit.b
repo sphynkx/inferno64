@@ -39,6 +39,9 @@ init()
 
 hasekeyboard(): int
 {
+	host := getenv("emuhost");
+	if(host == nil || hd host != "Nt")
+		return 0;
 	fd := sys->open("/dev/ekeyboard", Sys->OREAD);
 	if(fd == nil)
 		return 0;
@@ -151,4 +154,3 @@ unquoted(s: string): list of string
 		return unquoted(s + "'");
 	return args;
 }
-
