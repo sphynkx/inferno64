@@ -1336,6 +1336,8 @@ termset(void)
 
 		setutf8consolecp();
 
+		FlushConsoleInputBuffer(kbdh);
+
 	}
 }
 

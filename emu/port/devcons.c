@@ -95,6 +95,7 @@ static struct
 	int	raw;		/* true if we shouldn't process input */
 	Ref	ctl;		/* number of opens to the control file */
 	Ref	ptr;		/* number of opens to the ptr file */
+	Ref	ekbd;		/* number of opens to the enhanced keyboard file */
 	int	scan;		/* true if reading raw scancodes */
 	int	x;		/* index into line */
 	char	line[1024];	/* current input line */
@@ -176,7 +177,12 @@ winkbdslave(void *a)
 		 */
 		ekbdputc(k);
 
-		if(k >= 0 && k < Spec){
+		/*
+		 * Legacy console path:
+		 * mirror ordinary text into /dev/cons only when there is
+		 * no active enhanced keyboard consumer.
+		 */
+		if(kbd.ekbd.ref == 0 && k >= 0 && k < Spec){
 			r = k;
 			if(r == '\r')
 				r = '\n';
@@ -222,7 +228,7 @@ winmouseslave(void *a)
 	}
 	/* not reached */
 }
-#endif
+#endif /* __MINGW32__ block */
 
 void
 gkbdputc(Queue *q, int ch)
@@ -339,6 +345,10 @@ consopen(Chan *c, int omode)
 #endif
 		break;
 
+	case Qekeyboard:
+		incref(&kbd.ekbd);
+		break;
+
 	case Qscancode:
 		qlock(&kbd.gq);
 		if(gkscanq != nil || gkscanid[0] == '\0') {
@@ -385,6 +395,10 @@ consclose(Chan *c)
 		/* last close of control file turns off raw */
 		if(decref(&kbd.ctl) == 0)
 			kbd.raw = 0;
+		break;
+
+	case Qekeyboard:
+		decref(&kbd.ekbd);
 		break;
 
 	case Qemouse:
