@@ -353,12 +353,17 @@ consopen(Chan *c, int omode)
 		break;
 
 	case Qekeyboard:
+#ifdef __linux__
+		c->flag &= ~COPEN;
+		error("not supported");
+#else
 		if(incref(&kbd.ekbd) == 1){
 #ifdef __MINGW32__
 			flushconsoleinput();
 #endif
 			qflush(ekbdq);
 		}
+#endif
 		break;
 
 	case Qscancode:
