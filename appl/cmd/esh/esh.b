@@ -202,14 +202,15 @@ init(drawcontext: ref Draw->Context, argv: list of string)
 		if (stdinconsole)
 			interactive |= ctxt.INTERACTIVE;
 		ctxt.setoptions(interactive, 1);
+		useekeyboard := (interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole;
 
-		if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && ismingw()){
+		if(useekeyboard && ismingw()){
 			ekfd := sys->open(EKEYBOARD, Sys->OREAD);
 			if(ekfd != nil)
 				runekeyboard(ctxt, ekfd);
 			else
 				runfile(ctxt, sys->fildes(0), "stdin", nil);
-		}else if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && hasekeyboard())
+		}else if(useekeyboard && hasekeyboard())
 			runekeyboard(ctxt, nil);
 		else
 			runfile(ctxt, sys->fildes(0), "stdin", nil);
@@ -273,7 +274,6 @@ hasekeyboard(): int
 	fd := sys->open(EKEYBOARD, Sys->OREAD);
 	if(fd == nil)
 		return 0;
-	fd = nil;
 	return 1;
 }
 
