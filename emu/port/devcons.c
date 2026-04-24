@@ -158,6 +158,7 @@ enum
 static int mingwekbdtrace = -1;
 static ulong mingwekbdseq;
 static ulong mingwekbdphaseseq;
+static Lock mingwekbdlock;
 static struct
 {
 	ulong	seq;
@@ -202,15 +203,19 @@ mingwekbdtraceenabled(void)
 static void
 mingwekbdstate(char *edge, char *tag, int line)
 {
+	ulong seq;
+
 	if(!mingwekbdtraceenabled())
 		return;
 
+	lock(&mingwekbdlock);
+	seq = ++mingwekbdphaseseq;
 	/* DBG  MinGW */
 	print("mingw-ekbd %s %s @devcons.c:%d seq=%lud pid=%d text=%s ctl=%ld ekbd=%ld raw=%d ekbdq=%d kbdq=%d hostpending=%d\n",
 		edge,
 		tag,
 		line,
-		++mingwekbdphaseseq,
+		seq,
 		up != nil ? up->pid : -1,
 		up != nil && up->text != nil ? up->text : "?",
 		kbd.ctl.ref,
@@ -220,6 +225,7 @@ mingwekbdstate(char *edge, char *tag, int line)
 		kbdq != nil ? qlen(kbdq) : -1,
 		consoleinputpending());
 	/* /DBG  MinGW */
+	unlock(&mingwekbdlock);
 }
 
 static void
@@ -228,6 +234,7 @@ mingwekbdqtransition(char *tag, char *qname, int line, int before, int after)
 	if(!mingwekbdtraceenabled())
 		return;
 
+	lock(&mingwekbdlock);
 	/* DBG  MinGW */
 	print("mingw-ekbd QUEUE %s %s @devcons.c:%d before=%d after=%d ctl=%ld ekbd=%ld raw=%d hostpending=%d\n",
 		tag,
@@ -240,6 +247,7 @@ mingwekbdqtransition(char *tag, char *qname, int line, int before, int after)
 		kbd.raw,
 		consoleinputpending());
 	/* /DBG  MinGW */
+	unlock(&mingwekbdlock);
 }
 
 static void
@@ -250,6 +258,7 @@ mingwekbdresidue(char *tag, int line)
 	if(kbdq == nil || qlen(kbdq) == 0)
 		return;
 
+	lock(&mingwekbdlock);
 	/* DBG  MinGW */
 	print("mingw-ekbd RESIDUE %s @devcons.c:%d kbdq=%d ekbdq=%d ctl=%ld ekbd=%ld raw=%d hostpending=%d\n",
 		tag,
@@ -261,6 +270,7 @@ mingwekbdresidue(char *tag, int line)
 		kbd.raw,
 		consoleinputpending());
 	/* /DBG  MinGW */
+	unlock(&mingwekbdlock);
 }
 
 static void
@@ -269,6 +279,7 @@ mingwekbdrecord(int ch)
 	if(!mingwekbdtraceenabled())
 		return;
 
+	lock(&mingwekbdlock);
 	mingwekbdrecent[mingwekbdrecenti].seq = ++mingwekbdseq;
 	mingwekbdrecent[mingwekbdrecenti].ch = ch;
 	mingwekbdrecent[mingwekbdrecenti].ordinary = ordinarykey(ch);
@@ -282,6 +293,7 @@ mingwekbdrecord(int ch)
 	mingwekbdrecenti = (mingwekbdrecenti + 1) % MinGWEkbdRecent;
 	if(mingwekbdrecentn < MinGWEkbdRecent)
 		mingwekbdrecentn++;
+	unlock(&mingwekbdlock);
 }
 
 static void
@@ -291,9 +303,12 @@ mingwekbddumprecent(char *tag)
 
 	if(!mingwekbdtraceenabled())
 		return;
-	if(mingwekbdrecentn == 0)
-		return;
 
+	lock(&mingwekbdlock);
+	if(mingwekbdrecentn == 0){
+		unlock(&mingwekbdlock);
+		return;
+	}
 	/* DBG  MinGW */
 	print("mingw-ekbd RING input %s recent-events=%d\n", tag, mingwekbdrecentn);
 	/* /DBG  MinGW */
@@ -315,6 +330,7 @@ mingwekbddumprecent(char *tag)
 			mingwekbdrecent[idx].hostpending);
 		/* /DBG  MinGW */
 	}
+	unlock(&mingwekbdlock);
 }
 
 static void
@@ -323,6 +339,7 @@ mingwekbdroutekbdq(int ch, int before, int after)
 	if(!mingwekbdtraceenabled())
 		return;
 
+	lock(&mingwekbdlock);
 	mingwekbdroute[mingwekbdroutei].seq = ++mingwekbdseq;
 	mingwekbdroute[mingwekbdroutei].ch = ch;
 	mingwekbdroute[mingwekbdroutei].raw = kbd.raw;
@@ -335,6 +352,7 @@ mingwekbdroutekbdq(int ch, int before, int after)
 	mingwekbdroutei = (mingwekbdroutei + 1) % MinGWEkbdRoute;
 	if(mingwekbdrouten < MinGWEkbdRoute)
 		mingwekbdrouten++;
+	unlock(&mingwekbdlock);
 }
 
 static void
@@ -344,9 +362,12 @@ mingwekbddumproute(char *tag)
 
 	if(!mingwekbdtraceenabled())
 		return;
-	if(mingwekbdrouten == 0)
-		return;
 
+	lock(&mingwekbdlock);
+	if(mingwekbdrouten == 0){
+		unlock(&mingwekbdlock);
+		return;
+	}
 	/* DBG  MinGW */
 	print("mingw-ekbd RING kbdq %s recent-routes=%d\n", tag, mingwekbdrouten);
 	/* /DBG  MinGW */
@@ -367,6 +388,7 @@ mingwekbddumproute(char *tag)
 			mingwekbdroute[idx].hostpending);
 		/* /DBG  MinGW */
 	}
+	unlock(&mingwekbdlock);
 }
 
 static void
