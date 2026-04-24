@@ -241,7 +241,8 @@ mingwekbdhost(char *tag, int line)
 	lock(&mingwekbdlock);
 	pending = consoleinputpending();
 	peek[0] = '\0';
-	if(consoleinputpeek(peek, sizeof(peek)) < 0 || peek[0] == '\0')
+	consoleinputpeek(peek, sizeof(peek));
+	if(peek[0] == '\0')
 		snprint(peek, sizeof(peek), "unavailable");
 	/* DBG  MinGW */
 	print("mingw-ekbd HOST %s @devcons.c:%d hostpending=%d hostpeek=%s ctl=%ld ekbd=%ld raw=%d ekbdq=%d kbdq=%d\n",

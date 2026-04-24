@@ -44,7 +44,8 @@ mingwtracekopen(char *phase, char *path, int mode, int line, int fd)
 	f = up != nil && up->env != nil ? up->env->fgrp : nil;
 	hostpending = consoleinputpending();
 	hostpeek[0] = '\0';
-	if(consoleinputpeek(hostpeek, sizeof(hostpeek)) < 0 || hostpeek[0] == '\0')
+	consoleinputpeek(hostpeek, sizeof(hostpeek));
+	if(hostpeek[0] == '\0')
 		snprint(hostpeek, sizeof(hostpeek), "unavailable");
 	/* DBG  MinGW */
 	print("mingw-kopen %s path=%s @sysfile.c:%d mode=%d fd=%d err=%s minfd=%d maxfd=%d hostpending=%d hostpeek=%s\n",
