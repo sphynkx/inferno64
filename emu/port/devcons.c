@@ -415,12 +415,9 @@ consopen(Chan *c, int omode)
 		if(incref(&kbd.ekbd) == 1){
 #ifdef __MINGW32__
 			flushconsoleinput();
-		}
-		qflush(ekbdq);
-#else
+#endif
 			qflush(ekbdq);
 		}
-#endif
 		break;
 
 	case Qscancode:
@@ -480,13 +477,8 @@ consclose(Chan *c)
 		break;
 
 	case Qekeyboard:
-#ifdef __MINGW32__
-		decref(&kbd.ekbd);
-		qflush(ekbdq);
-#else
 		if(decref(&kbd.ekbd) == 0)
 			qflush(ekbdq);
-#endif
 		break;
 
 	case Qscancode:
