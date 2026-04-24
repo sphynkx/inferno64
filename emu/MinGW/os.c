@@ -1132,6 +1132,18 @@ flushconsoleinput(void)
 	FlushConsoleInputBuffer(kbdh);
 }
 
+int
+consoleinputpending(void)
+{
+	DWORD n;
+
+	if(kbdh == INVALID_HANDLE_VALUE)
+		return -1;
+	if(!GetNumberOfConsoleInputEvents(kbdh, &n))
+		return -1;
+	return (int)n;
+}
+
 static int
 mousebuttons(DWORD state, DWORD flags)
 {

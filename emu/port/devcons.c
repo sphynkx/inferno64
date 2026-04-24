@@ -145,8 +145,111 @@ ordinarykey(int k)
 extern int reademouse(char *buf, int n);
 extern void enableconsolemouse(void);
 extern void disableconsolemouse(void);
+extern int consoleinputpending(void);
 
 static int mouseprocstarted;
+
+enum
+{
+	MinGWEkbdRecent = 16
+};
+
+static int mingwekbdtrace = -1;
+static ulong mingwekbdseq;
+static struct
+{
+	ulong	seq;
+	int	ch;
+	int	ordinary;
+	int	raw;
+	long	ctlref;
+	long	ekbdref;
+	int	ekbdqlen;
+	int	kbdqlen;
+	int	hostpending;
+} mingwekbdrecent[MinGWEkbdRecent];
+static int mingwekbdrecentn;
+static int mingwekbdrecenti;
+
+static int
+mingwekbdtraceenabled(void)
+{
+	char *v;
+
+	if(mingwekbdtrace >= 0)
+		return mingwekbdtrace;
+
+	v = getenv("INFERNO_MINGW_EKBD_TRACE");
+	mingwekbdtrace = v != nil && *v != '\0' && strcmp(v, "0") != 0;
+	return mingwekbdtrace;
+}
+
+static void
+mingwekbdlogstate(char *tag)
+{
+	if(!mingwekbdtraceenabled())
+		return;
+
+	fprint(2, "mingw-ekbd %s pid=%d text=%s ctl=%ld ekbd=%ld raw=%d ekbdq=%d kbdq=%d hostpending=%d\n",
+		tag,
+		up != nil ? up->pid : -1,
+		up != nil && up->text != nil ? up->text : "?",
+		kbd.ctl.ref,
+		kbd.ekbd.ref,
+		kbd.raw,
+		ekbdq != nil ? qlen(ekbdq) : -1,
+		kbdq != nil ? qlen(kbdq) : -1,
+		consoleinputpending());
+}
+
+static void
+mingwekbdrecord(int ch)
+{
+	if(!mingwekbdtraceenabled())
+		return;
+
+	mingwekbdrecent[mingwekbdrecenti].seq = ++mingwekbdseq;
+	mingwekbdrecent[mingwekbdrecenti].ch = ch;
+	mingwekbdrecent[mingwekbdrecenti].ordinary = ordinarykey(ch);
+	mingwekbdrecent[mingwekbdrecenti].raw = kbd.raw;
+	mingwekbdrecent[mingwekbdrecenti].ctlref = kbd.ctl.ref;
+	mingwekbdrecent[mingwekbdrecenti].ekbdref = kbd.ekbd.ref;
+	mingwekbdrecent[mingwekbdrecenti].ekbdqlen = ekbdq != nil ? qlen(ekbdq) : -1;
+	mingwekbdrecent[mingwekbdrecenti].kbdqlen = kbdq != nil ? qlen(kbdq) : -1;
+	mingwekbdrecent[mingwekbdrecenti].hostpending = consoleinputpending();
+
+	mingwekbdrecenti = (mingwekbdrecenti + 1) % MinGWEkbdRecent;
+	if(mingwekbdrecentn < MinGWEkbdRecent)
+		mingwekbdrecentn++;
+}
+
+static void
+mingwekbddumprecent(char *tag)
+{
+	int i, idx;
+
+	if(!mingwekbdtraceenabled())
+		return;
+	if(mingwekbdrecentn == 0)
+		return;
+
+	fprint(2, "mingw-ekbd %s recent-events=%d\n", tag, mingwekbdrecentn);
+	for(i = mingwekbdrecentn - 1; i >= 0; i--){
+		idx = mingwekbdrecenti - 1 - i;
+		if(idx < 0)
+			idx += MinGWEkbdRecent;
+		fprint(2, "mingw-ekbd recent seq=%lud ch=%d ordinary=%d raw=%d ctl=%ld ekbd=%ld ekbdq=%d kbdq=%d hostpending=%d\n",
+			mingwekbdrecent[idx].seq,
+			mingwekbdrecent[idx].ch,
+			mingwekbdrecent[idx].ordinary,
+			mingwekbdrecent[idx].raw,
+			mingwekbdrecent[idx].ctlref,
+			mingwekbdrecent[idx].ekbdref,
+			mingwekbdrecent[idx].ekbdqlen,
+			mingwekbdrecent[idx].kbdqlen,
+			mingwekbdrecent[idx].hostpending);
+	}
+}
 
 static void
 emouseput(char *buf, int n)
@@ -177,6 +280,7 @@ winkbdslave(void *a)
 		k = readekbd();
 		if(k < 0)
 			continue;
+		mingwekbdrecord(k);
 
 		/*
 		 * Full event stream for enhanced console clients.
@@ -237,6 +341,26 @@ winmouseslave(void *a)
 		emouseput(buf, n);
 	}
 	/* not reached */
+}
+
+#else
+
+static void
+mingwekbdlogstate(char *tag)
+{
+	USED(tag);
+}
+
+static void
+mingwekbddumprecent(char *tag)
+{
+	USED(tag);
+}
+
+static void
+mingwekbdrecord(int ch)
+{
+	USED(ch);
 }
 
 #endif
@@ -393,6 +517,7 @@ consopen(Chan *c, int omode)
 	switch((ulong)c->qid.path) {
 	case Qconsctl:
 		incref(&kbd.ctl);
+		mingwekbdlogstate("open consctl");
 		break;
 
 	case Qemouse:
@@ -411,6 +536,8 @@ consopen(Chan *c, int omode)
 	case Qekeyboard:
 #ifdef __MINGW32__
 		incref(&kbd.ekbd);
+		mingwekbdlogstate("open ekeyboard before qflush");
+		mingwekbddumprecent("open ekeyboard");
 		/*
 		 * Drop stale enhanced-key events on every open.
 		 *
@@ -421,6 +548,7 @@ consopen(Chan *c, int omode)
 		 * GC-driven FD finalization.
 		 */
 		qflush(ekbdq);
+		mingwekbdlogstate("open ekeyboard after qflush");
 #else
 		if(incref(&kbd.ekbd) == 1){
 			qflush(ekbdq);
@@ -474,6 +602,7 @@ consclose(Chan *c)
 		/* last close of control file turns off raw */
 		if(decref(&kbd.ctl) == 0)
 			kbd.raw = 0;
+		mingwekbdlogstate("close consctl");
 		break;
 
 	case Qemouse:
@@ -487,6 +616,8 @@ consclose(Chan *c)
 	case Qekeyboard:
 		if(decref(&kbd.ekbd) == 0)
 			qflush(ekbdq);
+		mingwekbdlogstate("close ekeyboard");
+		mingwekbddumprecent("close ekeyboard");
 		break;
 
 	case Qscancode:
@@ -681,11 +812,13 @@ conswrite(Chan *c, void *va, long n, vlong offset)
 		for(a = buf; a;){
 			if(strncmp(a, "rawon", 5) == 0){
 				kbd.raw = 1;
+				mingwekbdlogstate("consctl rawon");
 				/* clumsy hack - wake up reader */
 				ch = 0;
 				qwrite(kbdq, &ch, 1);
 			} else if(strncmp(buf, "rawoff", 6) == 0){
 				kbd.raw = 0;
+				mingwekbdlogstate("consctl rawoff");
 			}
 			if((a = strchr(a, ' ')) != nil)
 				a++;
