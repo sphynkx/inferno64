@@ -145,6 +145,7 @@ ordinarykey(int k)
 extern int reademouse(char *buf, int n);
 extern void enableconsolemouse(void);
 extern void disableconsolemouse(void);
+extern void flushconsoleinput(void);
 
 static int mouseprocstarted;
 
@@ -412,14 +413,22 @@ consopen(Chan *c, int omode)
 #ifdef __MINGW32__
 		incref(&kbd.ekbd);
 		/*
-		 * Drop stale enhanced-key events on every open.
+		 * Two-level flush to discard stale keystrokes from interactive
+		 * shell use before the app opens the keyboard:
 		 *
-		 * The MinGW reader already drains console input continuously
-		 * into ekbdq, so flushing the queue here is enough to discard
-		 * pre-open shell/build keystrokes without depending on
-		 * first-open / last-close transitions that can lag under
-		 * GC-driven FD finalization.
+		 * 1. Flush ekbdq to drop events winkbdslave has already queued.
+		 * 2. Flush the Windows console input buffer so winkbdslave
+		 *    cannot re-introduce those buffered events after step 1.
+		 * 3. Flush ekbdq again to drop any in-flight events that
+		 *    winkbdslave queued between steps 1 and 2.
+		 *
+		 * This prevents pending shell/build keystrokes from reaching
+		 * the newly opened /dev/ekeyboard consumer and eliminates the
+		 * timing window in which the Windows console buffer could
+		 * refill the Inferno queue immediately after the first flush.
 		 */
+		qflush(ekbdq);
+		flushconsoleinput();
 		qflush(ekbdq);
 #else
 		if(incref(&kbd.ekbd) == 1){

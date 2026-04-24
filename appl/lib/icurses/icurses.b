@@ -11,6 +11,11 @@ ks: string;
 ki: int;
 kn: int;
 
+# Retry parameters for openkbd() on platforms where the keyboard device
+# may not be immediately available after console input is flushed.
+KbdOpenRetries:   con 4;
+KbdOpenRetryMs:   con 15;
+
 init()
 {
 	sys = load Sys Sys->PATH;
@@ -27,11 +32,23 @@ init()
 
 openkbd(): int
 {
+	i: int;
+
 	consctl = sys->open(ConsctlPath, Sys->OWRITE);
 	if(consctl != nil)
 		sys->fprint(consctl, "rawon");
 
-	kbd = sys->open(KeyboardPath, Sys->OREAD);
+	# On Windows/MinGW the kernel flushes both the Windows console input
+	# buffer and the Inferno ekbdq on open to discard stale shell keystrokes.
+	# That flush is asynchronous relative to the console reader thread, so
+	# give it a short settling window, then retry a few times if the first
+	# open fails (intermittent transient failure observed in interactive use).
+	for(i = 0; i < KbdOpenRetries; i++){
+		kbd = sys->open(KeyboardPath, Sys->OREAD);
+		if(kbd != nil)
+			break;
+		sys->sleep(KbdOpenRetryMs);
+	}
 	if(kbd == nil){
 		if(consctl != nil)
 			sys->fprint(consctl, "rawoff");
