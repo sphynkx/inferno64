@@ -113,6 +113,11 @@ badmodule(path: string)
 	raise "fail:bad module" ;
 }
 
+ismingw(): int
+{
+	return env != nil && env->getenv("emuhost") == "Nt";
+}
+
 initialise()
 {
 	if (sys == nil) {
@@ -198,7 +203,7 @@ init(drawcontext: ref Draw->Context, argv: list of string)
 			interactive |= ctxt.INTERACTIVE;
 		ctxt.setoptions(interactive, 1);
 
-		if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && env != nil && env->getenv("emuhost") == "Nt"){
+		if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && ismingw()){
 			ekfd := sys->open(EKEYBOARD, Sys->OREAD);
 			if(ekfd != nil)
 				runekeyboard(ctxt, ekfd);
@@ -261,7 +266,7 @@ isconsole(fd: ref Sys->FD): int
 
 hasekeyboard(): int
 {
-	if(env != nil && env->getenv("emuhost") == "Nt"){
+	if(ismingw()){
 		(ok, nil) := sys->stat(EKEYBOARD);
 		return ok >= 0;
 	}
@@ -316,10 +321,10 @@ trimlastutf(s: string): string
 
 readekeyline(fd: ref Sys->FD, prompt: string): (string, string)
 {
-	localfd := fd;
-	if(localfd == nil)
-		localfd = sys->open(EKEYBOARD, Sys->OREAD);
-	if(localfd == nil)
+	activefd := fd;
+	if(activefd == nil)
+		activefd = sys->open(EKEYBOARD, Sys->OREAD);
+	if(activefd == nil)
 		return (nil, sys->sprint("can't open %s: %r", EKEYBOARD));
 
 	sys->fprint(stderr(), "%s", prompt);
@@ -330,7 +335,7 @@ readekeyline(fd: ref Sys->FD, prompt: string): (string, string)
 	npending := 0;
 
 	for(;;){
-		n := sys->read(localfd, buf, len buf);
+		n := sys->read(activefd, buf, len buf);
 		if(n < 0)
 			return (nil, sys->sprint("read error on %s: %r", EKEYBOARD));
 		if(n == 0)
