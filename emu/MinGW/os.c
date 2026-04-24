@@ -1137,6 +1137,7 @@ consoleinputpending(void)
 {
 	DWORD n;
 
+	/* pending host console input events, or -1 if unavailable */
 	if(kbdh == INVALID_HANDLE_VALUE)
 		return -1;
 	if(!GetNumberOfConsoleInputEvents(kbdh, &n))

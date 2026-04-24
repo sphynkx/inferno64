@@ -284,6 +284,8 @@ winkbdslave(void *a)
 
 		/*
 		 * Full event stream for enhanced console clients.
+		 * MinGW now always queues it here and trims stale entries on
+		 * open via qflush(ekbdq), rather than gating on kbd.ekbd.ref.
 		 */
 		ekbdputc(k);
 
