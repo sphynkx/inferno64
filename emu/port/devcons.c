@@ -234,8 +234,8 @@ mingwekbddumprecent(char *tag)
 		return;
 
 	fprint(2, "mingw-ekbd %s recent-events=%d\n", tag, mingwekbdrecentn);
-	for(i = mingwekbdrecentn - 1; i >= 0; i--){
-		idx = mingwekbdrecenti - 1 - i;
+	for(i = 0; i < mingwekbdrecentn; i++){
+		idx = mingwekbdrecenti - mingwekbdrecentn + i;
 		if(idx < 0)
 			idx += MinGWEkbdRecent;
 		fprint(2, "mingw-ekbd recent seq=%lud ch=%d ordinary=%d raw=%d ctl=%ld ekbd=%ld ekbdq=%d kbdq=%d hostpending=%d\n",
