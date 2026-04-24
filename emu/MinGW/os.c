@@ -1124,6 +1124,14 @@ readekbd(void)
 	}
 }
 
+void
+flushconsoleinput(void)
+{
+	if(kbdh == INVALID_HANDLE_VALUE)
+		return;
+	FlushConsoleInputBuffer(kbdh);
+}
+
 static int
 mousebuttons(DWORD state, DWORD flags)
 {
@@ -1335,8 +1343,6 @@ termset(void)
 		saveconsolecp();
 
 		setutf8consolecp();
-
-		FlushConsoleInputBuffer(kbdh);
 
 	}
 }

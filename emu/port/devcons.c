@@ -131,6 +131,7 @@ kbdslave(void *a)
 extern int reademouse(char *buf, int n);
 extern void enableconsolemouse(void);
 extern void disableconsolemouse(void);
+extern void flushconsoleinput(void);
 
 static int mouseprocstarted;
 
@@ -174,12 +175,18 @@ winkbdslave(void *a)
 
 		/*
 		 * Full event stream for enhanced console clients.
+		 *
+		 * Only queue enhanced keyboard events while a consumer is
+		 * actively reading /dev/ekeyboard.  Otherwise startup
+		 * command characters accumulate here and are consumed by the
+		 * next interactive client as phantom keys.
 		 */
-		ekbdputc(k);
+		if(kbd.ekbd.ref != 0)
+			ekbdputc(k);
 
 		/*
 		 * Legacy console path:
-		 * mirror ordinary text into /dev/cons only when there is
+		 * mirror ordinary text into /dev/cons only while there is
 		 * no active enhanced keyboard consumer.
 		 */
 		if(kbd.ekbd.ref == 0 && k >= 0 && k < Spec){
@@ -228,7 +235,7 @@ winmouseslave(void *a)
 	}
 	/* not reached */
 }
-#endif /* __MINGW32__ block */
+#endif
 
 void
 gkbdputc(Queue *q, int ch)
@@ -346,7 +353,12 @@ consopen(Chan *c, int omode)
 		break;
 
 	case Qekeyboard:
-		incref(&kbd.ekbd);
+		if(incref(&kbd.ekbd) == 1){
+#ifdef __MINGW32__
+			flushconsoleinput();
+#endif
+			qflush(ekbdq);
+		}
 		break;
 
 	case Qscancode:
@@ -397,16 +409,17 @@ consclose(Chan *c)
 			kbd.raw = 0;
 		break;
 
-	case Qekeyboard:
-		decref(&kbd.ekbd);
-		break;
-
 	case Qemouse:
 		if(decref(&kbd.ptr) == 0){
 #ifdef __MINGW32__
 			disableconsolemouse();
 #endif
 		}
+		break;
+
+	case Qekeyboard:
+		if(decref(&kbd.ekbd) == 0)
+			qflush(ekbdq);
 		break;
 
 	case Qscancode:

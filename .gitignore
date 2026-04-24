@@ -373,15 +373,18 @@ os/pc64/forth.h
 .env
 
 # icurses pre-alpha sandbox
+##
 appl/lib/icurses/**
-!appl/lib/icurses/
-!appl/lib/icurses/**/
-!appl/lib/icurses/**/.gitkeep
-
+##!appl/lib/icurses/
+##!appl/lib/icurses/**/
+##!appl/lib/icurses/**/.gitkeep
+##
+##
 module/icurses/**
-!module/icurses/
-!module/icurses/**/
-!module/icurses/**/.gitkeep
+##!module/icurses/
+##!module/icurses/**/
+##!module/icurses/**/.gitkeep
+
 
 ## Misc
 _wrk
@@ -396,5 +399,3 @@ run
 *.b~~
 mkfile~
 mkfile~~
-mkconfig~
-mkconfig~~
