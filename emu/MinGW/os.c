@@ -29,6 +29,11 @@ static UINT hostinputcp = 0;
 static UINT hostoutputcp = 0;
 static int consolecpsaved = 0;
 static int consolecpchanged = 0;
+static int mingwtracelogging = -1;
+static int mingwtraceverbose = -1;
+static int mingwtracerunsep = 0;
+static HANDLE mingwtraceh = INVALID_HANDLE_VALUE;
+static Lock mingwtracelock;
 
 static DWORD mouseconsolestate = 0;
 static int mousemodesaved = 0;
@@ -61,6 +66,88 @@ static ConParser errparser;
 enum {
 	UTF8CP = 65001
 };
+
+static int
+mingwtraceenabled(void)
+{
+	char *v;
+
+	if(mingwtracelogging >= 0)
+		return mingwtracelogging;
+	v = getenv("INFERNO_MINGW_EKBD_TRACE");
+	mingwtracelogging = v != nil && *v != '\0' && strcmp(v, "0") != 0;
+	return mingwtracelogging;
+}
+
+int
+mingwtraceverboseenabled(void)
+{
+	char *v;
+
+	if(mingwtraceverbose >= 0)
+		return mingwtraceverbose;
+	v = getenv("INFERNO_MINGW_EKBD_TRACE_VERBOSE");
+	mingwtraceverbose = v != nil && *v != '\0' && strcmp(v, "0") != 0;
+	return mingwtraceverbose;
+}
+
+static HANDLE
+mingwtracehandle(void)
+{
+	char *path;
+
+	if(!mingwtraceenabled())
+		return INVALID_HANDLE_VALUE;
+	if(mingwtraceh != INVALID_HANDLE_VALUE)
+		return mingwtraceh;
+
+	path = getenv("INFERNO_MINGW_EKBD_LOG");
+	if(path == nil || *path == '\0')
+		path = "inferno-mingw-ekbd.log";
+
+	mingwtraceh = CreateFileA(path,
+		FILE_APPEND_DATA,
+		FILE_SHARE_READ|FILE_SHARE_WRITE,
+		nil,
+		OPEN_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL,
+		nil);
+	return mingwtraceh;
+}
+
+void
+mingwtracelog(char *fmt, ...)
+{
+	char buf[1024];
+	char *e;
+	DWORD nwritten;
+	HANDLE h;
+	va_list arg;
+
+	if(!mingwtraceenabled())
+		return;
+
+	lock(&mingwtracelock);
+	h = mingwtracehandle();
+	if(h == INVALID_HANDLE_VALUE){
+		unlock(&mingwtracelock);
+		return;
+	}
+	if(!mingwtracerunsep){
+		WriteFile(h, "======================\n", 23, &nwritten, nil);
+		mingwtracerunsep = 1;
+	}
+
+	va_start(arg, fmt);
+	e = vseprint(buf, buf + sizeof(buf) - 2, fmt, arg);
+	va_end(arg);
+	if(e == nil)
+		e = buf + sizeof(buf) - 2;
+	if(e == buf || e[-1] != '\n')
+		*e++ = '\n';
+	WriteFile(h, buf, e - buf, &nwritten, nil);
+	unlock(&mingwtracelock);
+}
 
 static void
 saveconsolecp(void)

@@ -6,6 +6,7 @@
 #ifdef __MINGW32__
 extern int consoleinputpending(void);
 extern int consoleinputpeek(char *buf, int n);
+extern void mingwtracelog(char *fmt, ...);
 
 static int mingwopentrace = -1;
 
@@ -48,7 +49,7 @@ mingwtracekopen(char *phase, char *path, int mode, int line, int fd)
 	if(hostpeek[0] == '\0')
 		snprint(hostpeek, sizeof(hostpeek), "unavailable");
 	/* DBG  MinGW */
-	print("mingw-kopen %s path=%s @sysfile.c:%d mode=%d fd=%d err=%s minfd=%d maxfd=%d hostpending=%d hostpeek=%s\n",
+	mingwtracelog("okbd kopen=%s path=%s @sysfile.c:%d mode=%d fd=%d err=%s minfd=%d maxfd=%d hp=%d peek=%s",
 		phase,
 		path,
 		line,
@@ -585,33 +586,33 @@ kopen(char *path, int mode)
 
 	if(waserror()){
 #ifdef __MINGW32__
-		mingwtracekopen("FAIL outer", path, mode, __LINE__, -1);
+		mingwtracekopen("fail.outer", path, mode, __LINE__, -1);
 #endif
 		return -1;
 	}
 
 	openmode(mode);                         /* error check only */
 #ifdef __MINGW32__
-	mingwtracekopen("BEGIN", path, mode, __LINE__, -1);
+	mingwtracekopen("begin", path, mode, __LINE__, -1);
 #endif
 	c.c = namec(path, Aopen, mode, 0);
 #ifdef __MINGW32__
-	mingwtracekopen("STATE namec-ok", path, mode, __LINE__, -1);
+	mingwtracekopen("namec.ok", path, mode, __LINE__, -1);
 #endif
 	if(waserror()){
 #ifdef __MINGW32__
-		mingwtracekopen("FAIL inner", path, mode, __LINE__, -1);
+		mingwtracekopen("fail.inner", path, mode, __LINE__, -1);
 #endif
 		cclose(c.c);
 		nexterror();
 	}
 #ifdef __MINGW32__
-	mingwtracekopen("STATE newfd-begin", path, mode, __LINE__, -1);
+	mingwtracekopen("newfd.begin", path, mode, __LINE__, -1);
 #endif
 	fd = newfd(c.c);
 	if(fd < 0){
 #ifdef __MINGW32__
-		mingwtracekopen("FAIL newfd", path, mode, __LINE__, fd);
+		mingwtracekopen("fail.newfd", path, mode, __LINE__, fd);
 #endif
 		error(Enofd);
 	}
@@ -619,7 +620,7 @@ kopen(char *path, int mode)
 
 	poperror();
 #ifdef __MINGW32__
-	mingwtracekopen("END", path, mode, __LINE__, fd);
+	mingwtracekopen("ok", path, mode, __LINE__, fd);
 #endif
 	return fd;
 }
