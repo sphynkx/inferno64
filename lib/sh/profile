@@ -9,10 +9,10 @@ and {~ $host Linux} {
 	user = inferno
 	home = /usr/inferno
 	path = (/dis $local .)
+	cd $local
 }
 bind -c '#U*'^$emuwdir $local
 and {! ~ $host Linux} {bind -a '#U*'/home /usr}
-and {~ $host Linux} {cd $emuwdir}
 and {! ~ $host Linux} {cd $local}
 and {ftest -e namespace}	{nsbuild}
 #cd $home
