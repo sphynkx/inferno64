@@ -198,8 +198,14 @@ init(drawcontext: ref Draw->Context, argv: list of string)
 			interactive |= ctxt.INTERACTIVE;
 		ctxt.setoptions(interactive, 1);
 
-		if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && hasekeyboard())
-			runekeyboard(ctxt);
+		if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && env != nil && env->getenv("emuhost") == "Nt"){
+			ekfd := sys->open(EKEYBOARD, Sys->OREAD);
+			if(ekfd != nil)
+				runekeyboard(ctxt, ekfd);
+			else
+				runfile(ctxt, sys->fildes(0), "stdin", nil);
+		}else if((interactive & ctxt.INTERACTIVE) != 0 && !stdinconsole && hasekeyboard())
+			runekeyboard(ctxt, nil);
 		else
 			runfile(ctxt, sys->fildes(0), "stdin", nil);
 	} else {
@@ -255,6 +261,10 @@ isconsole(fd: ref Sys->FD): int
 
 hasekeyboard(): int
 {
+	if(env != nil && env->getenv("emuhost") == "Nt"){
+		(ok, nil) := sys->stat(EKEYBOARD);
+		return ok >= 0;
+	}
 	fd := sys->open(EKEYBOARD, Sys->OREAD);
 	if(fd == nil)
 		return 0;
@@ -304,10 +314,12 @@ trimlastutf(s: string): string
 	return s[0:i];
 }
 
-readekeyline(prompt: string): (string, string)
+readekeyline(fd: ref Sys->FD, prompt: string): (string, string)
 {
-	fd := sys->open(EKEYBOARD, Sys->OREAD);
-	if(fd == nil)
+	localfd := fd;
+	if(localfd == nil)
+		localfd = sys->open(EKEYBOARD, Sys->OREAD);
+	if(localfd == nil)
 		return (nil, sys->sprint("can't open %s: %r", EKEYBOARD));
 
 	sys->fprint(stderr(), "%s", prompt);
@@ -318,7 +330,7 @@ readekeyline(prompt: string): (string, string)
 	npending := 0;
 
 	for(;;){
-		n := sys->read(fd, buf, len buf);
+		n := sys->read(localfd, buf, len buf);
 		if(n < 0)
 			return (nil, sys->sprint("read error on %s: %r", EKEYBOARD));
 		if(n == 0)
@@ -381,7 +393,7 @@ readekeyline(prompt: string): (string, string)
 	}
 }
 
-runekeyboard(ctxt: ref Context)
+runekeyboard(ctxt: ref Context, fd: ref Sys->FD)
 {
 	laststatus: string;
 
@@ -396,7 +408,7 @@ runekeyboard(ctxt: ref Context)
 			}
 		}
 
-		(line, err) := readekeyline(prompt);
+		(line, err) := readekeyline(fd, prompt);
 		if(err != nil){
 			if(err == "eof")
 				break;
