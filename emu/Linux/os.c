@@ -5,14 +5,17 @@
 #include 	<pwd.h>
 #include	<sched.h>
 #include	<sys/resource.h>
+#include	<sys/select.h>
 #include	<sys/wait.h>
 #include	<sys/time.h>
 
+#include	<errno.h>
 #include	<stdint.h>
 
 #include	"dat.h"
 #include	"fns.h"
 #include	"error.h"
+#include	"keyboard.h"
 
 #include <semaphore.h>
 
@@ -260,8 +263,207 @@ readkbd(void)
 	return buf[0];
 }
 
+static int
+readkbdchar(int *cp, int timeoutms)
+{
+	int n;
+	char ch;
+
+	if(timeoutms >= 0){
+		fd_set rd;
+		struct timeval tv;
+
+		FD_ZERO(&rd);
+		FD_SET(0, &rd);
+		tv.tv_sec = timeoutms/1000;
+		tv.tv_usec = (timeoutms%1000)*1000;
+		n = select(1, &rd, nil, nil, &tv);
+		if(n <= 0)
+			return 0;
+	}
+
+	n = read(0, &ch, sizeof(ch));
+	if(n < 0){
+		if(errno == EINTR)
+			return 0;
+		print("keyboard read error (n=%d, %s)\n", n, strerror(errno));
+		pexit("keyboard thread", 0);
+		return 0;
+	}
+	/* stdin EOF is a normal way for the keyboard thread to terminate */
+	if(n <= 0)
+		pexit("keyboard thread", 0);
+
+	*cp = (uchar)ch;
+	return 1;
+}
+
+static int
+readkbdrune(int c0)
+{
+	int c, n;
+	char buf[UTFmax];
+	Rune r;
+
+	buf[0] = c0;
+	n = 1;
+	while(n < UTFmax && !fullrune(buf, n)){
+		if(!readkbdchar(&c, -1))
+			return c0;
+		buf[n++] = c;
+	}
+	/*
+	 * If UTF decoding still fails here, treat it as malformed UTF-8 and
+	 * fall back to the first byte rather than inventing a synthetic token.
+	 */
+	if(chartorune(&r, buf) <= 0)
+		return c0;
+	return r;
+}
+
+static int
+parsecsikey(int lead)
+{
+	int c, i, n, num;
+	char seq[32];
+
+	seq[0] = lead;
+	n = 1;
+	while(n < (int)sizeof(seq)-1){
+		if(!readkbdchar(&c, 25))
+			break;
+		seq[n++] = c;
+		/* ECMA-48 CSI/SS3 final byte range */
+		if(c >= '@' && c <= '~')
+			break;
+	}
+	seq[n] = 0;
+
+	if(lead == '['){
+		switch(seq[n-1]){
+		case 'A':
+			return Up;
+		case 'B':
+			return Down;
+		case 'C':
+			return Right;
+		case 'D':
+			return Left;
+		case 'F':
+			return End;
+		case 'H':
+			return Home;
+		case 'Z':
+			return BackTab;
+		case '~':
+			num = 0;
+			for(i = 1; i < n-1 && seq[i] >= '0' && seq[i] <= '9'; i++)
+				num = num*10 + seq[i] - '0';
+			switch(num){
+			case 1:
+			case 7:
+				return Home;
+			case 2:
+				return Ins;
+			case 3:
+				return Del;
+			case 4:
+			case 8:
+				return End;
+			case 5:
+				return Pgup;
+			case 6:
+				return Pgdown;
+			case 15:
+				return KF|5;
+			case 17:
+				return KF|6;
+			case 18:
+				return KF|7;
+			case 19:
+				return KF|8;
+			case 20:
+				return KF|9;
+			case 21:
+				return KF|10;
+			case 23:
+				return KF|11;
+			case 24:
+				return KF|12;
+			}
+			break;
+		}
+	}else if(lead == 'O'){
+		switch(seq[1]){
+		case 'A':
+			return Up;
+		case 'B':
+			return Down;
+		case 'C':
+			return Right;
+		case 'D':
+			return Left;
+		case 'F':
+			return End;
+		case 'H':
+			return Home;
+		case 'P':
+			return KF|1;
+		case 'Q':
+			return KF|2;
+		case 'R':
+			return KF|3;
+		case 'S':
+			return KF|4;
+		}
+	}
+
+	return No;
+}
+
+int
+readekbd(void)
+{
+	int c, k;
+
+	if(!readkbdchar(&c, -1))
+		return -1;
+
+	switch(c){
+	case '\r':
+		return '\n';
+	case DELETE:
+		return '\b';
+	case CTRLC:
+		cleanexit(0);
+		return -1;
+	case Esc:
+		if(!readkbdchar(&c, 25))
+			return Esc;
+		if(c == '[' || c == 'O'){
+			k = parsecsikey(c);
+			if(k != No)
+				return k;
+			/*
+			 * Treat unrecognised CSI/SS3 sequences as a bare Escape.
+			 * Non-CSI ESC-prefixed input such as Alt+key combinations
+			 * continues below into the APP|c path.
+			 */
+			return Esc;
+		}
+		if((c & 0x80) != 0)
+			return readkbdrune(c);
+		return APP | c;
+	}
+
+	if((c & 0x80) != 0)
+		return readkbdrune(c);
+
+	return c;
+}
+
 /*
- * Return an abitrary millisecond clock time
+ * Return an arbitrary millisecond clock time
  */
 long
 osmillisec(void)
