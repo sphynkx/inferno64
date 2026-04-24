@@ -67,6 +67,8 @@ enum {
 	UTF8CP = 65001
 };
 
+static char mingwtraceseparator[] = "======================\n";
+
 static int
 mingwtraceenabled(void)
 {
@@ -134,7 +136,7 @@ mingwtracelog(char *fmt, ...)
 		return;
 	}
 	if(!mingwtracerunsep){
-		WriteFile(h, "======================\n", 23, &nwritten, nil);
+		WriteFile(h, mingwtraceseparator, strlen(mingwtraceseparator), &nwritten, nil);
 		mingwtracerunsep = 1;
 	}
 
