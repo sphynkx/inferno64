@@ -151,11 +151,13 @@ static int mouseprocstarted;
 
 enum
 {
-	MinGWEkbdRecent = 16
+	MinGWEkbdRecent = 16,
+	MinGWEkbdRoute = 16
 };
 
 static int mingwekbdtrace = -1;
 static ulong mingwekbdseq;
+static ulong mingwekbdphaseseq;
 static struct
 {
 	ulong	seq;
@@ -170,6 +172,19 @@ static struct
 } mingwekbdrecent[MinGWEkbdRecent];
 static int mingwekbdrecentn;
 static int mingwekbdrecenti;
+static struct
+{
+	ulong	seq;
+	int	ch;
+	int	raw;
+	long	ctlref;
+	long	ekbdref;
+	int	kbdqbefore;
+	int	kbdqafter;
+	int	hostpending;
+} mingwekbdroute[MinGWEkbdRoute];
+static int mingwekbdrouten;
+static int mingwekbdroutei;
 
 static int
 mingwekbdtraceenabled(void)
@@ -185,13 +200,17 @@ mingwekbdtraceenabled(void)
 }
 
 static void
-mingwekbdlogstate(char *tag)
+mingwekbdstate(char *edge, char *tag, int line)
 {
 	if(!mingwekbdtraceenabled())
 		return;
 
-	fprint(2, "mingw-ekbd %s pid=%d text=%s ctl=%ld ekbd=%ld raw=%d ekbdq=%d kbdq=%d hostpending=%d\n",
+	/* DBG  MinGW */
+	print("mingw-ekbd %s %s @devcons.c:%d seq=%lud pid=%d text=%s ctl=%ld ekbd=%ld raw=%d ekbdq=%d kbdq=%d hostpending=%d\n",
+		edge,
 		tag,
+		line,
+		++mingwekbdphaseseq,
 		up != nil ? up->pid : -1,
 		up != nil && up->text != nil ? up->text : "?",
 		kbd.ctl.ref,
@@ -200,6 +219,48 @@ mingwekbdlogstate(char *tag)
 		ekbdq != nil ? qlen(ekbdq) : -1,
 		kbdq != nil ? qlen(kbdq) : -1,
 		consoleinputpending());
+	/* /DBG  MinGW */
+}
+
+static void
+mingwekbdqtransition(char *tag, char *qname, int line, int before, int after)
+{
+	if(!mingwekbdtraceenabled())
+		return;
+
+	/* DBG  MinGW */
+	print("mingw-ekbd QUEUE %s %s @devcons.c:%d before=%d after=%d ctl=%ld ekbd=%ld raw=%d hostpending=%d\n",
+		tag,
+		qname,
+		line,
+		before,
+		after,
+		kbd.ctl.ref,
+		kbd.ekbd.ref,
+		kbd.raw,
+		consoleinputpending());
+	/* /DBG  MinGW */
+}
+
+static void
+mingwekbdresidue(char *tag, int line)
+{
+	if(!mingwekbdtraceenabled())
+		return;
+	if(kbdq == nil || qlen(kbdq) == 0)
+		return;
+
+	/* DBG  MinGW */
+	print("mingw-ekbd RESIDUE %s @devcons.c:%d kbdq=%d ekbdq=%d ctl=%ld ekbd=%ld raw=%d hostpending=%d\n",
+		tag,
+		line,
+		qlen(kbdq),
+		ekbdq != nil ? qlen(ekbdq) : -1,
+		kbd.ctl.ref,
+		kbd.ekbd.ref,
+		kbd.raw,
+		consoleinputpending());
+	/* /DBG  MinGW */
 }
 
 static void
@@ -233,12 +294,16 @@ mingwekbddumprecent(char *tag)
 	if(mingwekbdrecentn == 0)
 		return;
 
-	fprint(2, "mingw-ekbd %s recent-events=%d\n", tag, mingwekbdrecentn);
+	/* DBG  MinGW */
+	print("mingw-ekbd RING input %s recent-events=%d\n", tag, mingwekbdrecentn);
+	/* /DBG  MinGW */
 	for(i = 0; i < mingwekbdrecentn; i++){
 		idx = mingwekbdrecenti - mingwekbdrecentn + i;
 		if(idx < 0)
 			idx += MinGWEkbdRecent;
-		fprint(2, "mingw-ekbd recent seq=%lud ch=%d ordinary=%d raw=%d ctl=%ld ekbd=%ld ekbdq=%d kbdq=%d hostpending=%d\n",
+		/* DBG  MinGW */
+		print("mingw-ekbd RING input idx=%d seq=%lud ch=%d ordinary=%d raw=%d ctl=%ld ekbd=%ld ekbdq=%d kbdq=%d hostpending=%d\n",
+			i,
 			mingwekbdrecent[idx].seq,
 			mingwekbdrecent[idx].ch,
 			mingwekbdrecent[idx].ordinary,
@@ -248,6 +313,59 @@ mingwekbddumprecent(char *tag)
 			mingwekbdrecent[idx].ekbdqlen,
 			mingwekbdrecent[idx].kbdqlen,
 			mingwekbdrecent[idx].hostpending);
+		/* /DBG  MinGW */
+	}
+}
+
+static void
+mingwekbdroutekbdq(int ch, int before, int after)
+{
+	if(!mingwekbdtraceenabled())
+		return;
+
+	mingwekbdroute[mingwekbdroutei].seq = ++mingwekbdseq;
+	mingwekbdroute[mingwekbdroutei].ch = ch;
+	mingwekbdroute[mingwekbdroutei].raw = kbd.raw;
+	mingwekbdroute[mingwekbdroutei].ctlref = kbd.ctl.ref;
+	mingwekbdroute[mingwekbdroutei].ekbdref = kbd.ekbd.ref;
+	mingwekbdroute[mingwekbdroutei].kbdqbefore = before;
+	mingwekbdroute[mingwekbdroutei].kbdqafter = after;
+	mingwekbdroute[mingwekbdroutei].hostpending = consoleinputpending();
+
+	mingwekbdroutei = (mingwekbdroutei + 1) % MinGWEkbdRoute;
+	if(mingwekbdrouten < MinGWEkbdRoute)
+		mingwekbdrouten++;
+}
+
+static void
+mingwekbddumproute(char *tag)
+{
+	int i, idx;
+
+	if(!mingwekbdtraceenabled())
+		return;
+	if(mingwekbdrouten == 0)
+		return;
+
+	/* DBG  MinGW */
+	print("mingw-ekbd RING kbdq %s recent-routes=%d\n", tag, mingwekbdrouten);
+	/* /DBG  MinGW */
+	for(i = 0; i < mingwekbdrouten; i++){
+		idx = mingwekbdroutei - mingwekbdrouten + i;
+		if(idx < 0)
+			idx += MinGWEkbdRoute;
+		/* DBG  MinGW */
+		print("mingw-ekbd RING kbdq idx=%d seq=%lud ch=%d raw=%d ctl=%ld ekbd=%ld before=%d after=%d hostpending=%d\n",
+			i,
+			mingwekbdroute[idx].seq,
+			mingwekbdroute[idx].ch,
+			mingwekbdroute[idx].raw,
+			mingwekbdroute[idx].ctlref,
+			mingwekbdroute[idx].ekbdref,
+			mingwekbdroute[idx].kbdqbefore,
+			mingwekbdroute[idx].kbdqafter,
+			mingwekbdroute[idx].hostpending);
+		/* /DBG  MinGW */
 	}
 }
 
@@ -270,7 +388,7 @@ emouseput(char *buf, int n)
 void
 winkbdslave(void *a)
 {
-	int k, nb;
+	int k, nb, beforeq;
 	Rune r;
 	char b;
 	char ubuf[UTFmax];
@@ -315,14 +433,18 @@ winkbdslave(void *a)
 						break;
 					}
 				}
+				beforeq = kbdq != nil ? qlen(kbdq) : -1;
 				qproduce(kbdq, &b, 1);
+				mingwekbdroutekbdq(k, beforeq, kbdq != nil ? qlen(kbdq) : -1);
 			}else{
 				nb = runetochar(ubuf, &r);
 				if(nb <= 0)
 					continue;
 				if(kbd.raw == 0)
 					write(1, ubuf, nb);
+				beforeq = kbdq != nil ? qlen(kbdq) : -1;
 				qproduce(kbdq, ubuf, nb);
+				mingwekbdroutekbdq(k, beforeq, kbdq != nil ? qlen(kbdq) : -1);
 			}
 		}
 	}
@@ -348,9 +470,28 @@ winmouseslave(void *a)
 #else
 
 static void
-mingwekbdlogstate(char *tag)
+mingwekbdstate(char *edge, char *tag, int line)
+{
+	USED(edge);
+	USED(tag);
+	USED(line);
+}
+
+static void
+mingwekbdqtransition(char *tag, char *qname, int line, int before, int after)
 {
 	USED(tag);
+	USED(qname);
+	USED(line);
+	USED(before);
+	USED(after);
+}
+
+static void
+mingwekbdresidue(char *tag, int line)
+{
+	USED(tag);
+	USED(line);
 }
 
 static void
@@ -363,6 +504,20 @@ static void
 mingwekbdrecord(int ch)
 {
 	USED(ch);
+}
+
+static void
+mingwekbdroutekbdq(int ch, int before, int after)
+{
+	USED(ch);
+	USED(before);
+	USED(after);
+}
+
+static void
+mingwekbddumproute(char *tag)
+{
+	USED(tag);
 }
 
 #endif
@@ -518,8 +673,9 @@ consopen(Chan *c, int omode)
 	c = devopen(c, omode, contab, nelem(contab), devgen);
 	switch((ulong)c->qid.path) {
 	case Qconsctl:
+		mingwekbdstate("BEGIN", "consctl open", __LINE__);
 		incref(&kbd.ctl);
-		mingwekbdlogstate("open consctl");
+		mingwekbdstate("END", "consctl open", __LINE__);
 		break;
 
 	case Qemouse:
@@ -536,10 +692,15 @@ consopen(Chan *c, int omode)
 		break;
 
 	case Qekeyboard:
+	{
 #ifdef __MINGW32__
+		int before;
+
+		mingwekbdstate("BEGIN", "ekeyboard open", __LINE__);
 		incref(&kbd.ekbd);
-		mingwekbdlogstate("open ekeyboard before qflush");
-		mingwekbddumprecent("open ekeyboard");
+		mingwekbdstate("STATE", "ekeyboard open after incref", __LINE__);
+		mingwekbddumprecent("ekeyboard open");
+		mingwekbddumproute("ekeyboard open");
 		/*
 		 * Drop stale enhanced-key events on every open.
 		 *
@@ -549,14 +710,18 @@ consopen(Chan *c, int omode)
 		 * first-open / last-close transitions that can lag under
 		 * GC-driven FD finalization.
 		 */
+		before = ekbdq != nil ? qlen(ekbdq) : -1;
 		qflush(ekbdq);
-		mingwekbdlogstate("open ekeyboard after qflush");
+		mingwekbdqtransition("flush", "ekbdq", __LINE__, before, ekbdq != nil ? qlen(ekbdq) : -1);
+		mingwekbdresidue("ekeyboard open", __LINE__);
+		mingwekbdstate("END", "ekeyboard open", __LINE__);
 #else
 		if(incref(&kbd.ekbd) == 1){
 			qflush(ekbdq);
 		}
 #endif
 		break;
+	}
 
 	case Qscancode:
 		qlock(&kbd.gq);
@@ -601,10 +766,12 @@ consclose(Chan *c)
 
 	switch((ulong)c->qid.path) {
 	case Qconsctl:
+		mingwekbdstate("BEGIN", "consctl close", __LINE__);
 		/* last close of control file turns off raw */
 		if(decref(&kbd.ctl) == 0)
 			kbd.raw = 0;
-		mingwekbdlogstate("close consctl");
+		mingwekbdresidue("consctl close", __LINE__);
+		mingwekbdstate("END", "consctl close", __LINE__);
 		break;
 
 	case Qemouse:
@@ -616,10 +783,19 @@ consclose(Chan *c)
 		break;
 
 	case Qekeyboard:
+		mingwekbdstate("BEGIN", "ekeyboard close", __LINE__);
 		if(decref(&kbd.ekbd) == 0)
+		{
+			int before;
+
+			before = ekbdq != nil ? qlen(ekbdq) : -1;
 			qflush(ekbdq);
-		mingwekbdlogstate("close ekeyboard");
-		mingwekbddumprecent("close ekeyboard");
+			mingwekbdqtransition("flush", "ekbdq", __LINE__, before, ekbdq != nil ? qlen(ekbdq) : -1);
+		}
+		mingwekbdresidue("ekeyboard close", __LINE__);
+		mingwekbddumprecent("ekeyboard close");
+		mingwekbddumproute("ekeyboard close");
+		mingwekbdstate("END", "ekeyboard close", __LINE__);
 		break;
 
 	case Qscancode:
@@ -813,14 +989,20 @@ conswrite(Chan *c, void *va, long n, vlong offset)
 		buf[n] = 0;
 		for(a = buf; a;){
 			if(strncmp(a, "rawon", 5) == 0){
+				mingwekbdstate("BEGIN", "consctl rawon", __LINE__);
 				kbd.raw = 1;
-				mingwekbdlogstate("consctl rawon");
+				mingwekbdstate("STATE", "consctl rawon set", __LINE__);
 				/* clumsy hack - wake up reader */
 				ch = 0;
+				x = kbdq != nil ? qlen(kbdq) : -1;
 				qwrite(kbdq, &ch, 1);
+				mingwekbdqtransition("qwrite", "kbdq", __LINE__, x, kbdq != nil ? qlen(kbdq) : -1);
+				mingwekbdstate("END", "consctl rawon", __LINE__);
 			} else if(strncmp(buf, "rawoff", 6) == 0){
+				mingwekbdstate("BEGIN", "consctl rawoff", __LINE__);
 				kbd.raw = 0;
-				mingwekbdlogstate("consctl rawoff");
+				mingwekbdresidue("consctl rawoff", __LINE__);
+				mingwekbdstate("END", "consctl rawoff", __LINE__);
 			}
 			if((a = strchr(a, ' ')) != nil)
 				a++;

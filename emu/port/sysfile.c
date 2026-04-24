@@ -3,6 +3,54 @@
 #include        "error.h"
 #include        "kernel.h"
 
+#ifdef __MINGW32__
+static int mingwopentrace = -1;
+
+static int
+mingwopentraceenabled(void)
+{
+	char *v;
+
+	if(mingwopentrace >= 0)
+		return mingwopentrace;
+	v = getenv("INFERNO_MINGW_EKBD_TRACE");
+	mingwopentrace = v != nil && *v != '\0' && strcmp(v, "0") != 0;
+	return mingwopentrace;
+}
+
+static int
+mingwtraceopenpath(char *path)
+{
+	if(path == nil)
+		return 0;
+	return strcmp(path, "#c/consctl") == 0 || strcmp(path, "#c/ekeyboard") == 0;
+}
+
+static void
+mingwtracekopen(char *phase, char *path, int mode, int line, int fd)
+{
+	Fgrp *f;
+
+	if(!mingwopentraceenabled())
+		return;
+	if(!mingwtraceopenpath(path))
+		return;
+
+	f = up != nil && up->env != nil ? up->env->fgrp : nil;
+	/* DBG  MinGW */
+	print("mingw-kopen %s path=%s @sysfile.c:%d mode=%d fd=%d err=%s minfd=%d maxfd=%d\n",
+		phase,
+		path,
+		line,
+		mode,
+		fd,
+		up != nil && up->env != nil ? up->env->errstr : "?",
+		f != nil ? f->minfd : -1,
+		f != nil ? f->maxfd : -1);
+	/* /DBG  MinGW */
+}
+#endif
+
 static int
 growfd(Fgrp *f, int fd)
 {
@@ -523,21 +571,44 @@ kopen(char *path, int mode)
 	int fd;
 	volatile struct { Chan *c; } c;
 
-	if(waserror())
+	if(waserror()){
+#ifdef __MINGW32__
+		mingwtracekopen("FAIL outer", path, mode, __LINE__, -1);
+#endif
 		return -1;
+	}
 
 	openmode(mode);                         /* error check only */
+#ifdef __MINGW32__
+	mingwtracekopen("BEGIN", path, mode, __LINE__, -1);
+#endif
 	c.c = namec(path, Aopen, mode, 0);
+#ifdef __MINGW32__
+	mingwtracekopen("STATE namec-ok", path, mode, __LINE__, -1);
+#endif
 	if(waserror()){
+#ifdef __MINGW32__
+		mingwtracekopen("FAIL inner", path, mode, __LINE__, -1);
+#endif
 		cclose(c.c);
 		nexterror();
 	}
+#ifdef __MINGW32__
+	mingwtracekopen("STATE newfd-begin", path, mode, __LINE__, -1);
+#endif
 	fd = newfd(c.c);
-	if(fd < 0)
+	if(fd < 0){
+#ifdef __MINGW32__
+		mingwtracekopen("FAIL newfd", path, mode, __LINE__, fd);
+#endif
 		error(Enofd);
+	}
 	poperror();
 
 	poperror();
+#ifdef __MINGW32__
+	mingwtracekopen("END", path, mode, __LINE__, fd);
+#endif
 	return fd;
 }
 
