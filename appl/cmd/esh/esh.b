@@ -258,6 +258,7 @@ hasekeyboard(): int
 	fd := sys->open(EKEYBOARD, Sys->OREAD);
 	if(fd == nil)
 		return 0;
+	fd = nil;
 	return 1;
 }
 
