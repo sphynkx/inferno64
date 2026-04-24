@@ -388,7 +388,7 @@ emouseput(char *buf, int n)
 void
 winkbdslave(void *a)
 {
-	int k, nb, beforeq;
+	int k, nb, kbdqbefore;
 	Rune r;
 	char b;
 	char ubuf[UTFmax];
@@ -433,18 +433,18 @@ winkbdslave(void *a)
 						break;
 					}
 				}
-				beforeq = kbdq != nil ? qlen(kbdq) : -1;
+				kbdqbefore = kbdq != nil ? qlen(kbdq) : -1;
 				qproduce(kbdq, &b, 1);
-				mingwekbdroutekbdq(k, beforeq, kbdq != nil ? qlen(kbdq) : -1);
+				mingwekbdroutekbdq(k, kbdqbefore, kbdq != nil ? qlen(kbdq) : -1);
 			}else{
 				nb = runetochar(ubuf, &r);
 				if(nb <= 0)
 					continue;
 				if(kbd.raw == 0)
 					write(1, ubuf, nb);
-				beforeq = kbdq != nil ? qlen(kbdq) : -1;
+				kbdqbefore = kbdq != nil ? qlen(kbdq) : -1;
 				qproduce(kbdq, ubuf, nb);
-				mingwekbdroutekbdq(k, beforeq, kbdq != nil ? qlen(kbdq) : -1);
+				mingwekbdroutekbdq(k, kbdqbefore, kbdq != nil ? qlen(kbdq) : -1);
 			}
 		}
 	}
