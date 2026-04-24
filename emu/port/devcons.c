@@ -145,7 +145,6 @@ ordinarykey(int k)
 extern int reademouse(char *buf, int n);
 extern void enableconsolemouse(void);
 extern void disableconsolemouse(void);
-extern void flushconsoleinput(void);
 
 static int mouseprocstarted;
 
@@ -181,21 +180,19 @@ winkbdslave(void *a)
 
 		/*
 		 * Full event stream for enhanced console clients.
-		 *
-		 * Only queue enhanced keyboard events while a consumer is
-		 * actively reading /dev/ekeyboard.  Otherwise startup
-		 * command characters accumulate here and are consumed by the
-		 * next interactive client as phantom keys.
 		 */
-		if(kbd.ekbd.ref != 0)
-			ekbdputc(k);
+		ekbdputc(k);
 
 		/*
 		 * Legacy console path:
-		 * mirror ordinary text into /dev/cons only while there is
-		 * no active enhanced keyboard consumer.
+		 * continue mirroring ordinary text into /dev/cons.
+		 *
+		 * MinGW /dev/ekeyboard opens/closes are observed through real
+		 * descriptor lifetime, which can lag behind user-visible
+		 * Limbo open/close sequencing because FD finalization is GC
+		 * driven.  Do not gate legacy mirroring on kbd.ekbd.ref.
 		 */
-		if(kbd.ekbd.ref == 0 && ordinarykey(k)){
+		if(ordinarykey(k)){
 			r = k;
 			if(r == '\r')
 				r = '\n';
@@ -412,12 +409,23 @@ consopen(Chan *c, int omode)
 		break;
 
 	case Qekeyboard:
-		if(incref(&kbd.ekbd) == 1){
 #ifdef __MINGW32__
-			flushconsoleinput();
-#endif
+		incref(&kbd.ekbd);
+		/*
+		 * Drop stale enhanced-key events on every open.
+		 *
+		 * The MinGW reader already drains console input continuously
+		 * into ekbdq, so flushing the queue here is enough to discard
+		 * pre-open shell/build keystrokes without depending on
+		 * first-open / last-close transitions that can lag under
+		 * GC-driven FD finalization.
+		 */
+		qflush(ekbdq);
+#else
+		if(incref(&kbd.ekbd) == 1){
 			qflush(ekbdq);
 		}
+#endif
 		break;
 
 	case Qscancode:
