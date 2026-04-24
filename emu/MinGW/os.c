@@ -1145,6 +1145,66 @@ consoleinputpending(void)
 	return (int)n;
 }
 
+int
+consoleinputpeek(char *buf, int n)
+{
+	INPUT_RECORD rec;
+	KEY_EVENT_RECORD *k;
+	MOUSE_EVENT_RECORD *m;
+	DWORD r;
+
+	if(buf == nil || n <= 0)
+		return -1;
+	if(kbdh == INVALID_HANDLE_VALUE){
+		snprint(buf, n, "unavailable");
+		return -1;
+	}
+	if(!PeekConsoleInput(kbdh, &rec, 1, &r)){
+		snprint(buf, n, "peek-failed");
+		return -1;
+	}
+	if(r == 0){
+		snprint(buf, n, "empty");
+		return 0;
+	}
+
+	switch(rec.EventType){
+	case KEY_EVENT:
+		k = &rec.Event.KeyEvent;
+		snprint(buf, n, "key down=%d vk=%ud scan=%ud ch=%ud ctrl=%lud repeat=%ud",
+			k->bKeyDown,
+			k->wVirtualKeyCode,
+			k->wVirtualScanCode,
+			(ulong)k->uChar.UnicodeChar,
+			k->dwControlKeyState,
+			k->wRepeatCount);
+		return 1;
+	case MOUSE_EVENT:
+		m = &rec.Event.MouseEvent;
+		snprint(buf, n, "mouse x=%d y=%d btn=%lud ctrl=%lud flags=%lud",
+			m->dwMousePosition.X,
+			m->dwMousePosition.Y,
+			m->dwButtonState,
+			m->dwControlKeyState,
+			m->dwEventFlags);
+		return 1;
+	case WINDOW_BUFFER_SIZE_EVENT:
+		snprint(buf, n, "resize x=%d y=%d",
+			rec.Event.WindowBufferSizeEvent.dwSize.X,
+			rec.Event.WindowBufferSizeEvent.dwSize.Y);
+		return 1;
+	case FOCUS_EVENT:
+		snprint(buf, n, "focus set=%d", rec.Event.FocusEvent.bSetFocus);
+		return 1;
+	case MENU_EVENT:
+		snprint(buf, n, "menu cmd=%ud", rec.Event.MenuEvent.dwCommandId);
+		return 1;
+	default:
+		snprint(buf, n, "type=%ud", rec.EventType);
+		return 1;
+	}
+}
+
 static int
 mousebuttons(DWORD state, DWORD flags)
 {

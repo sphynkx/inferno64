@@ -4,6 +4,9 @@
 #include        "kernel.h"
 
 #ifdef __MINGW32__
+extern int consoleinputpending(void);
+extern int consoleinputpeek(char *buf, int n);
+
 static int mingwopentrace = -1;
 
 static int
@@ -30,6 +33,8 @@ static void
 mingwtracekopen(char *phase, char *path, int mode, int line, int fd)
 {
 	Fgrp *f;
+	char hostpeek[128];
+	int hostpending;
 
 	if(!mingwopentraceenabled())
 		return;
@@ -37,8 +42,11 @@ mingwtracekopen(char *phase, char *path, int mode, int line, int fd)
 		return;
 
 	f = up != nil && up->env != nil ? up->env->fgrp : nil;
+	hostpending = consoleinputpending();
+	if(consoleinputpeek(hostpeek, sizeof(hostpeek)) < 0 && hostpeek[0] == '\0')
+		snprint(hostpeek, sizeof(hostpeek), "unavailable");
 	/* DBG  MinGW */
-	print("mingw-kopen %s path=%s @sysfile.c:%d mode=%d fd=%d err=%s minfd=%d maxfd=%d\n",
+	print("mingw-kopen %s path=%s @sysfile.c:%d mode=%d fd=%d err=%s minfd=%d maxfd=%d hostpending=%d hostpeek=%s\n",
 		phase,
 		path,
 		line,
@@ -46,7 +54,9 @@ mingwtracekopen(char *phase, char *path, int mode, int line, int fd)
 		fd,
 		up != nil && up->env != nil ? up->env->errstr : "?",
 		f != nil ? f->minfd : -1,
-		f != nil ? f->maxfd : -1);
+		f != nil ? f->maxfd : -1,
+		hostpending,
+		hostpeek);
 	/* /DBG  MinGW */
 }
 #endif
