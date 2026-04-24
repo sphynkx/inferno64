@@ -127,14 +127,6 @@ kbdslave(void *a)
 	/* pexit("kbdslave", 0); */	/* not reached */
 }
 
-#ifdef __MINGW32__
-extern int reademouse(char *buf, int n);
-extern void enableconsolemouse(void);
-extern void disableconsolemouse(void);
-extern void flushconsoleinput(void);
-
-static int mouseprocstarted;
-
 static void
 ekbdputc(int ch)
 {
@@ -142,6 +134,20 @@ ekbdputc(int ch)
 		return;
 	gkbdputc(ekbdq, ch);
 }
+
+static int
+ordinarykey(int k)
+{
+	return k >= 0 && k < Spec;
+}
+
+#ifdef __MINGW32__
+extern int reademouse(char *buf, int n);
+extern void enableconsolemouse(void);
+extern void disableconsolemouse(void);
+extern void flushconsoleinput(void);
+
+static int mouseprocstarted;
 
 static void
 emouseput(char *buf, int n)
@@ -189,7 +195,7 @@ winkbdslave(void *a)
 		 * mirror ordinary text into /dev/cons only while there is
 		 * no active enhanced keyboard consumer.
 		 */
-		if(kbd.ekbd.ref == 0 && k >= 0 && k < Spec){
+		if(kbd.ekbd.ref == 0 && ordinarykey(k)){
 			r = k;
 			if(r == '\r')
 				r = '\n';
@@ -232,6 +238,57 @@ winmouseslave(void *a)
 		if(n <= 0)
 			continue;
 		emouseput(buf, n);
+	}
+	/* not reached */
+}
+
+#endif
+
+#ifdef __linux__
+void
+linuxkbdslave(void *a)
+{
+	int k, nb;
+	Rune r;
+	char b;
+	char ubuf[UTFmax];
+
+	USED(a);
+	for(;;){
+		k = readekbd();
+		if(k < 0)
+			continue;
+
+		if(kbd.ekbd.ref != 0)
+			ekbdputc(k);
+
+		if(kbd.ekbd.ref == 0 && ordinarykey(k)){
+			r = k;
+			if(r == '\r')
+				r = '\n';
+
+			if(r < 0x80){
+				b = r;
+				if(kbd.raw == 0){
+					switch(b){
+					case 0x15:
+						write(1, "^U\n", 3);
+						break;
+					default:
+						write(1, &b, 1);
+						break;
+					}
+				}
+				qproduce(kbdq, &b, 1);
+			}else{
+				nb = runetochar(ubuf, &r);
+				if(nb <= 0)
+					continue;
+				if(kbd.raw == 0)
+					write(1, ubuf, nb);
+				qproduce(kbdq, ubuf, nb);
+			}
+		}
 	}
 	/* not reached */
 }
@@ -311,6 +368,8 @@ consattach(char *spec)
 		kp = 1;
 #ifdef __MINGW32__
 		kproc("kbd", winkbdslave, 0, 0);
+#elif defined(__linux__)
+		kproc("kbd", linuxkbdslave, 0, 0);
 #else
 		kproc("kbd", kbdslave, 0, 0);
 #endif
