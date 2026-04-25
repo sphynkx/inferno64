@@ -10,6 +10,11 @@ kbuf: array of byte;
 ks: string;
 ki: int;
 kn: int;
+openkbdrun: int;
+
+LogPathEnv: con "/env/INFERNO_MINGW_EKBD_LOG";
+LogPathDefault: con "inferno-mingw-ekbd.log";
+LogSeparator: con "======================\n";
 
 init()
 {
@@ -23,25 +28,107 @@ init()
 	ks = "";
 	ki = 0;
 	kn = 0;
+	openkbdrun = 0;
+}
+
+readfile(path: string): string
+{
+	fd := sys->open(path, Sys->OREAD);
+	if(fd == nil)
+		return nil;
+	(ok, st) := sys->fstat(fd);
+	if(ok < 0 || int st.length <= 0)
+		return nil;
+	buf := array[int st.length] of byte;
+	n := sys->read(fd, buf, len buf);
+	if(n <= 0)
+		return nil;
+	return string buf[0:n];
+}
+
+logpath(): string
+{
+	path := readfile(LogPathEnv);
+	if(path == nil || len path == 0)
+		return LogPathDefault;
+	if(path[len path-1] == '\n')
+		path = path[0:len path-1];
+	if(path == nil || len path == 0)
+		return LogPathDefault;
+	return path;
+}
+
+openlog(): ref Sys->FD
+{
+	fd := sys->open(logpath(), Sys->OWRITE);
+	if(fd == nil)
+		fd = sys->create(logpath(), Sys->OWRITE, 8r666);
+	if(fd != nil)
+		sys->seek(fd, big 0, Sys->SEEKEND);
+	return fd;
+}
+
+logwrapper(run: int, step: string, detail: string)
+{
+	fd := openlog();
+	if(fd == nil)
+		return;
+	if(detail == nil || len detail == 0)
+		sys->fprint(fd, "okbd wrapper run=%d pid=%d step=%s\n", run, sys->pctl(0, nil), step);
+	else
+		sys->fprint(fd, "okbd wrapper run=%d pid=%d step=%s detail=%s\n", run, sys->pctl(0, nil), step, detail);
+}
+
+logwrapperbegin(run: int)
+{
+	fd := openlog();
+	if(fd == nil)
+		return;
+	sys->fprint(fd, "%s", LogSeparator);
+	sys->fprint(fd, "okbd wrapper run=%d pid=%d step=begin\n", run, sys->pctl(0, nil));
 }
 
 openkbd(): int
 {
-	consctl = sys->open(ConsctlPath, Sys->OWRITE);
-	if(consctl != nil)
-		sys->fprint(consctl, "rawon");
+	run := ++openkbdrun;
 
+	logwrapperbegin(run);
+	logwrapper(run, "cons.open.begin", ConsctlPath);
+	consctl = sys->open(ConsctlPath, Sys->OWRITE);
+	if(consctl == nil)
+		logwrapper(run, "cons.open.fail", sys->sprint("%r"));
+	else{
+		logwrapper(run, "cons.open.ok", sys->sprint("fd=%d", consctl.fd));
+		logwrapper(run, "rawon.begin", nil);
+		if(sys->fprint(consctl, "rawon") < 0)
+			logwrapper(run, "rawon.fail", sys->sprint("%r"));
+		else
+			logwrapper(run, "rawon.ok", nil);
+	}
+	if(consctl == nil)
+		logwrapper(run, "rawon.skip", "consctl=nil");
+
+	logwrapper(run, "ekbd.open.begin", KeyboardPath);
 	kbd = sys->open(KeyboardPath, Sys->OREAD);
 	if(kbd == nil){
-		if(consctl != nil)
-			sys->fprint(consctl, "rawoff");
+		logwrapper(run, "ekbd.open.fail", sys->sprint("%r"));
+		if(consctl != nil){
+			logwrapper(run, "cleanup.rawoff.begin", nil);
+			if(sys->fprint(consctl, "rawoff") < 0)
+				logwrapper(run, "cleanup.rawoff.fail", sys->sprint("%r"));
+			else
+				logwrapper(run, "cleanup.rawoff.ok", nil);
+		}
 		consctl = nil;
+		logwrapper(run, "return.fail", "kbd=nil");
 		return -1;
 	}
+	logwrapper(run, "ekbd.open.ok", sys->sprint("fd=%d", kbd.fd));
 
 	ks = "";
 	ki = 0;
 	kn = 0;
+	logwrapper(run, "return.ok", nil);
 	return 0;
 }
 
