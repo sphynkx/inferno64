@@ -1,0 +1,25 @@
+limbo .sbl 2.1
+Bugret
+2
+bugret.b
+bugret.m
+6
+3.24,25 0
+17,25 0
+4.23,25 1
+16,25 1
+5.31,32 2
+24,32 2
+0
+3
+0:retzero
+0
+0
+i2:retneg
+0
+0
+i4:passthru
+1
+64:v:9,10 i
+0
+i0
