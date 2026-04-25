@@ -1,0 +1,36 @@
+======================
+LIMBO-OKBD-WRAPPER run=2965266 pid=1 step=begin detail=host=Z:/home/runner/work/inferno64/inferno64/inferno-mingw-ekbd.log inferno=#UZ:/home/runner/work/inferno64/inferno64/inferno-mingw-ekbd.log
+LIMBO-OKBD-WRAPPER run=2965266 pid=1 step=cons.open.begin detail=/dev/consctl
+LIMBO-OKBD-WRAPPER run=2965266 pid=1 step=cons.open.ok detail=fd=3
+LIMBO-OKBD-WRAPPER run=2965266 pid=1 step=rawon.begin
+LIMBO-OKBD-WRAPPER run=2965266 pid=1 step=rawon.ok
+LIMBO-OKBD-WRAPPER run=2965266 pid=1 step=ekbd.open.begin detail=/dev/ekeyboard
+LIMBO-OKBD-WRAPPER run=2965266 pid=1 step=ekbd.open.ok detail=fd=5
+LIMBO-OKBD-WRAPPER run=2965266 pid=1 step=return.ok
+======================
+LIMBO-OKBD-WRAPPER run=2967431 pid=1 step=begin detail=host=Z:/home/runner/work/inferno64/inferno64/inferno-mingw-ekbd.log inferno=#UZ:/home/runner/work/inferno64/inferno64/inferno-mingw-ekbd.log
+LIMBO-OKBD-WRAPPER run=2967431 pid=1 step=cons.open.begin detail=/dev/consctl
+LIMBO-OKBD-WRAPPER run=2967431 pid=1 step=cons.open.ok detail=fd=3
+LIMBO-OKBD-WRAPPER run=2967431 pid=1 step=rawon.begin
+LIMBO-OKBD-WRAPPER run=2967431 pid=1 step=rawon.ok
+LIMBO-OKBD-WRAPPER run=2967431 pid=1 step=ekbd.open.begin detail=/dev/ekeyboard
+LIMBO-OKBD-WRAPPER run=2967431 pid=1 step=ekbd.open.ok detail=fd=4
+LIMBO-OKBD-WRAPPER run=2967431 pid=1 step=return.ok
+======================
+LIMBO-OKBD-WRAPPER run=3036196 pid=1 step=begin detail=host=Z:/home/runner/work/inferno64/inferno64/inferno-mingw-ekbd.log inferno=#UZ:/home/runner/work/inferno64/inferno64/inferno-mingw-ekbd.log
+LIMBO-OKBD-WRAPPER run=3036196 pid=1 step=cons.open.begin detail=/dev/consctl
+LIMBO-OKBD-WRAPPER run=3036196 pid=1 step=cons.open.ok detail=fd=3
+LIMBO-OKBD-WRAPPER run=3036196 pid=1 step=rawon.begin
+LIMBO-OKBD-WRAPPER run=3036196 pid=1 step=rawon.ok
+LIMBO-OKBD-WRAPPER run=3036196 pid=1 step=ekbd.open.begin detail=/dev/ekeyboard
+LIMBO-OKBD-WRAPPER run=3036196 pid=1 step=ekbd.open.ok detail=fd=4
+LIMBO-OKBD-WRAPPER run=3036196 pid=1 step=return.ok
+======================
+LIMBO-OKBD-WRAPPER run=3038726 pid=1 step=begin detail=host=Z:/home/runner/work/inferno64/inferno64/inferno-mingw-ekbd.log inferno=#UZ:/home/runner/work/inferno64/inferno64/inferno-mingw-ekbd.log
+LIMBO-OKBD-WRAPPER run=3038726 pid=1 step=cons.open.begin detail=/dev/consctl
+LIMBO-OKBD-WRAPPER run=3038726 pid=1 step=cons.open.ok detail=fd=3
+LIMBO-OKBD-WRAPPER run=3038726 pid=1 step=rawon.begin
+LIMBO-OKBD-WRAPPER run=3038726 pid=1 step=rawon.ok
+LIMBO-OKBD-WRAPPER run=3038726 pid=1 step=ekbd.open.begin detail=/dev/ekeyboard
+LIMBO-OKBD-WRAPPER run=3038726 pid=1 step=ekbd.open.ok detail=fd=4
+LIMBO-OKBD-WRAPPER run=3038726 pid=1 step=return.ok
