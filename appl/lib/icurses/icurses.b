@@ -103,8 +103,6 @@ openkbd(): int
 		else
 			logwrapper(run, "rawon.ok", nil);
 	}
-	if(consctl == nil)
-		logwrapper(run, "rawon.skip", "consctl=nil");
 
 	logwrapper(run, "ekbd.open.begin", KeyboardPath);
 	kbd = sys->open(KeyboardPath, Sys->OREAD);
