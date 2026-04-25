@@ -141,6 +141,16 @@ ordinarykey(int k)
 	return k >= 0 && k < Spec;
 }
 
+static int
+ekbdsessionactive(void)
+{
+#ifdef __MINGW32__
+	return kbd.raw != 0 && kbd.ekbd.ref != 0;
+#else
+	return kbd.ekbd.ref != 0;
+#endif
+}
+
 #ifdef __MINGW32__
 extern int reademouse(char *buf, int n);
 extern void enableconsolemouse(void);
@@ -473,14 +483,14 @@ winkbdslave(void *a)
 
 		/*
 		 * Legacy console path:
-		 * continue mirroring ordinary text into /dev/cons.
+		 * ordinary text should only reach /dev/cons when the enhanced
+		 * raw session does not currently own input.
 		 *
-		 * MinGW /dev/ekeyboard opens/closes are observed through real
-		 * descriptor lifetime, which can lag behind user-visible
-		 * Limbo open/close sequencing because FD finalization is GC
-		 * driven.  Do not gate legacy mirroring on kbd.ekbd.ref.
+		 * When MinGW raw + /dev/ekeyboard are both active, mirroring the
+		 * same ordinary key into kbdq leaks dialog-consumed text back to
+		 * the shell after the interactive session ends.
 		 */
-		if(ordinarykey(k)){
+		if(ordinarykey(k) && !ekbdsessionactive()){
 			r = k;
 			if(r == '\r')
 				r = '\n';
@@ -765,7 +775,7 @@ consopen(Chan *c, int omode)
 	case Qekeyboard:
 	{
 #ifdef __MINGW32__
-		int before;
+		int before, beforekbd;
 
 		mingwekbdstate("begin", "ekbd.open.backend", __LINE__);
 		incref(&kbd.ekbd);
@@ -782,9 +792,12 @@ consopen(Chan *c, int omode)
 		before = ekbdq != nil ? qlen(ekbdq) : -1;
 		qflush(ekbdq);
 		mingwekbdqtransition("flush", "ekbdq", __LINE__, before, ekbdq != nil ? qlen(ekbdq) : -1);
+		beforekbd = kbdq != nil ? qlen(kbdq) : -1;
+		qflush(kbdq);
+		mingwekbdqtransition("flush", "kbdq", __LINE__, beforekbd, kbdq != nil ? qlen(kbdq) : -1);
 		mingwekbdstate("ok", "ekbd.open.flush", __LINE__);
 #else
-		if(incref(&kbd.ekbd) == 1){
+		if(ekbdsessionactive() == 0 && incref(&kbd.ekbd) == 1){
 			qflush(ekbdq);
 		}
 #endif
@@ -854,11 +867,14 @@ consclose(Chan *c)
 		mingwekbdstate("begin", "ekbd.close", __LINE__);
 		if(decref(&kbd.ekbd) == 0)
 		{
-			int before;
+			int before, beforekbd;
 
 			before = ekbdq != nil ? qlen(ekbdq) : -1;
 			qflush(ekbdq);
 			mingwekbdqtransition("flush", "ekbdq", __LINE__, before, ekbdq != nil ? qlen(ekbdq) : -1);
+			beforekbd = kbdq != nil ? qlen(kbdq) : -1;
+			qflush(kbdq);
+			mingwekbdqtransition("flush", "kbdq", __LINE__, beforekbd, kbdq != nil ? qlen(kbdq) : -1);
 		}
 		mingwekbdresidue("ekeyboard close", __LINE__);
 		mingwekbddumprecent("ekeyboard close");
