@@ -141,11 +141,28 @@ ordinarykey(int k)
 	return k >= 0 && k < Spec;
 }
 
+static int
+ekbdsessionactive(void)
+{
+	/*
+	 * MinGW keeps draining host console input continuously, so gating
+	 * legacy mirroring on kbd.ekbd.ref alone can keep shell input
+	 * suppressed after the visible session has ended if FD finalization
+	 * lags.  The proven leak only happens while the enhanced raw session
+	 * is actively owning input, so require both raw mode and an open
+	 * /dev/ekeyboard reference there.
+	 */
+#ifdef __MINGW32__
+	return kbd.raw != 0 && kbd.ekbd.ref != 0;
+#else
+	return kbd.ekbd.ref != 0;
+#endif
+}
+
 #ifdef __MINGW32__
 extern int reademouse(char *buf, int n);
 extern void enableconsolemouse(void);
 extern void disableconsolemouse(void);
-extern void flushconsoleinput(void);
 
 static int mouseprocstarted;
 
@@ -181,21 +198,22 @@ winkbdslave(void *a)
 
 		/*
 		 * Full event stream for enhanced console clients.
-		 *
-		 * Only queue enhanced keyboard events while a consumer is
-		 * actively reading /dev/ekeyboard.  Otherwise startup
-		 * command characters accumulate here and are consumed by the
-		 * next interactive client as phantom keys.
+		 * MinGW keeps draining host console input into ekbdq and trims
+		 * stale entries on open via qflush(ekbdq), rather than waiting
+		 * for kbd.ekbd.ref before it starts collecting host events.
 		 */
-		if(kbd.ekbd.ref != 0)
-			ekbdputc(k);
+		ekbdputc(k);
 
 		/*
 		 * Legacy console path:
-		 * mirror ordinary text into /dev/cons only while there is
-		 * no active enhanced keyboard consumer.
+		 * ordinary text should only reach /dev/cons when the enhanced
+		 * raw session does not currently own input.
+		 *
+		 * When MinGW raw + /dev/ekeyboard are both active, mirroring the
+		 * same ordinary key into kbdq leaks dialog-consumed text back to
+		 * the shell after the interactive session ends.
 		 */
-		if(kbd.ekbd.ref == 0 && ordinarykey(k)){
+		if(ordinarykey(k) && !ekbdsessionactive()){
 			r = k;
 			if(r == '\r')
 				r = '\n';
@@ -412,13 +430,27 @@ consopen(Chan *c, int omode)
 		break;
 
 	case Qekeyboard:
-		if(incref(&kbd.ekbd) == 1){
+	{
 #ifdef __MINGW32__
-			flushconsoleinput();
-#endif
+		incref(&kbd.ekbd);
+		/*
+		 * Drop stale enhanced-key events on every open.
+		 *
+		 * The MinGW reader already drains console input continuously
+		 * into ekbdq, so flushing the queue here is enough to discard
+		 * pre-open shell/build keystrokes without depending on
+		 * first-open / last-close transitions that can lag under
+		 * GC-driven FD finalization.
+		 */
+		qflush(ekbdq);
+		qflush(kbdq);
+#else
+		if(incref(&kbd.ekbd) == 1){
 			qflush(ekbdq);
 		}
+#endif
 		break;
+	}
 
 	case Qscancode:
 		qlock(&kbd.gq);
@@ -478,7 +510,10 @@ consclose(Chan *c)
 
 	case Qekeyboard:
 		if(decref(&kbd.ekbd) == 0)
+		{
 			qflush(ekbdq);
+			qflush(kbdq);
+		}
 		break;
 
 	case Qscancode:
