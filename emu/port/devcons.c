@@ -144,6 +144,14 @@ ordinarykey(int k)
 static int
 ekbdsessionactive(void)
 {
+	/*
+	 * MinGW keeps draining host console input continuously, so gating
+	 * legacy mirroring on kbd.ekbd.ref alone can keep shell input
+	 * suppressed after the visible session has ended if FD finalization
+	 * lags.  The proven leak only happens while the enhanced raw session
+	 * is actively owning input, so require both raw mode and an open
+	 * /dev/ekeyboard reference there.
+	 */
 #ifdef __MINGW32__
 	return kbd.raw != 0 && kbd.ekbd.ref != 0;
 #else
@@ -476,8 +484,9 @@ winkbdslave(void *a)
 
 		/*
 		 * Full event stream for enhanced console clients.
-		 * MinGW now always queues it here and trims stale entries on
-		 * open via qflush(ekbdq), rather than gating on kbd.ekbd.ref.
+		 * MinGW keeps draining host console input into ekbdq and trims
+		 * stale entries on open via qflush(ekbdq), rather than waiting
+		 * for kbd.ekbd.ref before it starts collecting host events.
 		 */
 		ekbdputc(k);
 
@@ -797,7 +806,7 @@ consopen(Chan *c, int omode)
 		mingwekbdqtransition("flush", "kbdq", __LINE__, beforekbd, kbdq != nil ? qlen(kbdq) : -1);
 		mingwekbdstate("ok", "ekbd.open.flush", __LINE__);
 #else
-		if(ekbdsessionactive() == 0 && incref(&kbd.ekbd) == 1){
+		if(incref(&kbd.ekbd) == 1){
 			qflush(ekbdq);
 		}
 #endif
