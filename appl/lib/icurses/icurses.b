@@ -65,12 +65,20 @@ trimline(s: string): string
 
 hostjoin(base, leaf: string): string
 {
+	sep := "/";
+
 	if(base == nil || len base == 0)
 		return leaf;
 	c := base[len base-1];
 	if(c == '/' || c == '\\')
 		return base + leaf;
-	return base + "/" + leaf;
+	for(i := 0; i < len base; i++){
+		if(base[i] == '\\'){
+			sep = "\\";
+			break;
+		}
+	}
+	return base + sep + leaf;
 }
 
 hostlogpath(): string
