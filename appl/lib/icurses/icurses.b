@@ -11,13 +11,6 @@ ks: string;
 ki: int;
 kn: int;
 
-LogPathEnv: con "/env/INFERNO_MINGW_EKBD_LOG";
-LogWdirEnv: con "/env/emuwdir";
-LogPathDefault: con "inferno-mingw-ekbd.log";
-LogSeparator: con "======================\n";
-LogWrapperTag: con "LIMBO-OKBD-WRAPPER";
-HostFsPrefix: con "#U";
-
 init()
 {
 	sys = load Sys Sys->PATH;
@@ -32,162 +25,23 @@ init()
 	kn = 0;
 }
 
-readfile(path: string): string
-{
-	fd := sys->open(path, Sys->OREAD);
-	if(fd == nil)
-		return nil;
-	(ok, st) := sys->fstat(fd);
-	if(ok < 0 || int st.length <= 0){
-		fd = nil;
-		return nil;
-	}
-	buf := array[int st.length] of byte;
-	n := sys->read(fd, buf, len buf);
-	fd = nil;
-	if(n <= 0)
-		return nil;
-	return string buf[0:n];
-}
-
-trimline(s: string): string
-{
-	if(s == nil)
-		return nil;
-	while(len s > 0){
-		c := s[len s-1];
-		if(c != '\n' && c != '\r')
-			break;
-		s = s[0:len s-1];
-	}
-	return s;
-}
-
-hostjoin(base, leaf: string): string
-{
-	sep := "/";
-
-	if(base == nil || len base == 0)
-		return leaf;
-	c := base[len base-1];
-	if(c == '/' || c == '\\')
-		return base + leaf;
-	for(i := 0; i < len base; i++){
-		if(base[i] == '\\'){
-			sep = "\\";
-			break;
-		}
-	}
-	return base + sep + leaf;
-}
-
-hostlogpath(): string
-{
-	path := trimline(readfile(LogPathEnv));
-	if(path != nil && len path > 0)
-		return path;
-
-	wdir := trimline(readfile(LogWdirEnv));
-	if(wdir == nil || len wdir == 0)
-		return LogPathDefault;
-	return hostjoin(wdir, LogPathDefault);
-}
-
-infernohostpath(hostpath: string): string
-{
-	if(hostpath == nil || len hostpath == 0)
-		return nil;
-	if(len hostpath >= len HostFsPrefix && hostpath[0:len HostFsPrefix] == HostFsPrefix)
-		return hostpath;
-	return HostFsPrefix + hostpath;
-}
-
-openlog(): (ref Sys->FD, string, string)
-{
-	hostpath := hostlogpath();
-	path := infernohostpath(hostpath);
-	fd := sys->open(path, Sys->OWRITE);
-	if(fd == nil)
-		fd = sys->create(path, Sys->OWRITE, 8r666);
-	if(fd != nil)
-		sys->seek(fd, big 0, Sys->SEEKEND);
-	return (fd, hostpath, path);
-}
-
-writelog(line: string): int
-{
-	(fd, nil, nil) := openlog();
-	if(fd == nil)
-		return -1;
-	buf := array of byte line;
-	n := sys->write(fd, buf, len buf);
-	fd = nil;
-	if(n != len buf)
-		return -1;
-	return n;
-}
-
-logwrapper(run: int, step: string, detail: string)
-{
-	line: string;
-
-	if(detail == nil || len detail == 0)
-		line = sys->sprint("%s run=%d pid=%d step=%s\n", LogWrapperTag, run, sys->pctl(0, nil), step);
-	else
-		line = sys->sprint("%s run=%d pid=%d step=%s detail=%s\n", LogWrapperTag, run, sys->pctl(0, nil), step, detail);
-	if(writelog(line) < 0)
-		return;
-}
-
-logwrapperbegin(run: int)
-{
-	(fd, hostpath, path) := openlog();
-	if(fd == nil)
-		return;
-	sys->fprint(fd, "%s%s run=%d pid=%d step=begin detail=host=%s inferno=%s\n",
-		LogSeparator, LogWrapperTag, run, sys->pctl(0, nil), hostpath, path);
-	fd = nil;
-}
-
 openkbd(): int
 {
-	runstamp := sys->millisec();
-
-	logwrapperbegin(runstamp);
-	logwrapper(runstamp, "cons.open.begin", ConsctlPath);
 	consctl = sys->open(ConsctlPath, Sys->OWRITE);
-	if(consctl == nil)
-		logwrapper(runstamp, "cons.open.fail", sys->sprint("%r"));
-	else{
-		logwrapper(runstamp, "cons.open.ok", sys->sprint("fd=%d", consctl.fd));
-		logwrapper(runstamp, "rawon.begin", nil);
-		if(sys->fprint(consctl, "rawon") < 0)
-			logwrapper(runstamp, "rawon.fail", sys->sprint("%r"));
-		else
-			logwrapper(runstamp, "rawon.ok", nil);
-	}
+	if(consctl != nil)
+		sys->fprint(consctl, "rawon");
 
-	logwrapper(runstamp, "ekbd.open.begin", KeyboardPath);
 	kbd = sys->open(KeyboardPath, Sys->OREAD);
 	if(kbd == nil){
-		logwrapper(runstamp, "ekbd.open.fail", sys->sprint("%r"));
-		if(consctl != nil){
-			logwrapper(runstamp, "cleanup.rawoff.begin", nil);
-			if(sys->fprint(consctl, "rawoff") < 0)
-				logwrapper(runstamp, "cleanup.rawoff.fail", sys->sprint("%r"));
-			else
-				logwrapper(runstamp, "cleanup.rawoff.ok", nil);
-		}
+		if(consctl != nil)
+			sys->fprint(consctl, "rawoff");
 		consctl = nil;
-		logwrapper(runstamp, "return.fail", "kbd=nil");
 		return -1;
 	}
-	logwrapper(runstamp, "ekbd.open.ok", sys->sprint("fd=%d", kbd.fd));
 
 	ks = "";
 	ki = 0;
 	kn = 0;
-	logwrapper(runstamp, "return.ok", nil);
 	return 0;
 }
 

@@ -29,11 +29,6 @@ static UINT hostinputcp = 0;
 static UINT hostoutputcp = 0;
 static int consolecpsaved = 0;
 static int consolecpchanged = 0;
-static int mingwtracelogging = -1;
-static int mingwtraceverbose = -1;
-static int mingwtracerunsep = 0;
-static HANDLE mingwtraceh = INVALID_HANDLE_VALUE;
-static Lock mingwtracelock;
 
 static DWORD mouseconsolestate = 0;
 static int mousemodesaved = 0;
@@ -66,90 +61,6 @@ static ConParser errparser;
 enum {
 	UTF8CP = 65001
 };
-
-static char mingwtraceseparator[] = "======================\n";
-
-static int
-mingwtraceenabled(void)
-{
-	char *v;
-
-	if(mingwtracelogging >= 0)
-		return mingwtracelogging;
-	v = getenv("INFERNO_MINGW_EKBD_TRACE");
-	mingwtracelogging = v != nil && *v != '\0' && strcmp(v, "0") != 0;
-	return mingwtracelogging;
-}
-
-int
-mingwtraceverboseenabled(void)
-{
-	char *v;
-
-	if(mingwtraceverbose >= 0)
-		return mingwtraceverbose;
-	v = getenv("INFERNO_MINGW_EKBD_TRACE_VERBOSE");
-	mingwtraceverbose = v != nil && *v != '\0' && strcmp(v, "0") != 0;
-	return mingwtraceverbose;
-}
-
-static HANDLE
-mingwtracehandle(void)
-{
-	char *path;
-
-	if(!mingwtraceenabled())
-		return INVALID_HANDLE_VALUE;
-	if(mingwtraceh != INVALID_HANDLE_VALUE)
-		return mingwtraceh;
-
-	path = getenv("INFERNO_MINGW_EKBD_LOG");
-	if(path == nil || *path == '\0')
-		path = "inferno-mingw-ekbd.log";
-
-	mingwtraceh = CreateFileA(path,
-		FILE_APPEND_DATA,
-		FILE_SHARE_READ|FILE_SHARE_WRITE,
-		nil,
-		OPEN_ALWAYS,
-		FILE_ATTRIBUTE_NORMAL,
-		nil);
-	return mingwtraceh;
-}
-
-void
-mingwtracelog(char *fmt, ...)
-{
-	char buf[1024];
-	char *e;
-	DWORD nwritten;
-	HANDLE h;
-	va_list arg;
-
-	if(!mingwtraceenabled())
-		return;
-
-	lock(&mingwtracelock);
-	h = mingwtracehandle();
-	if(h == INVALID_HANDLE_VALUE){
-		unlock(&mingwtracelock);
-		return;
-	}
-	if(!mingwtracerunsep){
-		WriteFile(h, mingwtraceseparator, strlen(mingwtraceseparator), &nwritten, nil);
-		mingwtracerunsep = 1;
-	}
-
-	va_start(arg, fmt);
-	e = vseprint(buf, buf + sizeof(buf) - 2, fmt, arg);
-	va_end(arg);
-	if(e == nil)
-		e = buf + sizeof(buf) - 2;
-	if(e == buf || e[-1] != '\n')
-		*e++ = '\n';
-	WriteFile(h, buf, e - buf, &nwritten, nil);
-	unlock(&mingwtracelock);
-}
 
 static void
 saveconsolecp(void)
@@ -1210,87 +1121,6 @@ readekbd(void)
 
 			return ch;
 		}
-	}
-}
-
-void
-flushconsoleinput(void)
-{
-	if(kbdh == INVALID_HANDLE_VALUE)
-		return;
-	FlushConsoleInputBuffer(kbdh);
-}
-
-int
-consoleinputpending(void)
-{
-	DWORD n;
-
-	/* pending host console input events, or -1 if unavailable */
-	if(kbdh == INVALID_HANDLE_VALUE)
-		return -1;
-	if(!GetNumberOfConsoleInputEvents(kbdh, &n))
-		return -1;
-	return (int)n;
-}
-
-int
-consoleinputpeek(char *buf, int n)
-{
-	INPUT_RECORD rec;
-	KEY_EVENT_RECORD *k;
-	MOUSE_EVENT_RECORD *m;
-	DWORD r;
-
-	if(buf == nil || n <= 0)
-		return -1;
-	if(kbdh == INVALID_HANDLE_VALUE){
-		snprint(buf, n, "unavailable");
-		return -1;
-	}
-	if(!PeekConsoleInput(kbdh, &rec, 1, &r)){
-		snprint(buf, n, "peek-failed");
-		return -1;
-	}
-	if(r == 0){
-		snprint(buf, n, "empty");
-		return 0;
-	}
-
-	switch(rec.EventType){
-	case KEY_EVENT:
-		k = &rec.Event.KeyEvent;
-		snprint(buf, n, "key down=%d vk=%ud scan=%ud ch=%ud ctrl=%lud repeat=%ud",
-			k->bKeyDown,
-			k->wVirtualKeyCode,
-			k->wVirtualScanCode,
-			(ulong)k->uChar.UnicodeChar,
-			k->dwControlKeyState,
-			k->wRepeatCount);
-		return 1;
-	case MOUSE_EVENT:
-		m = &rec.Event.MouseEvent;
-		snprint(buf, n, "mouse x=%d y=%d btn=%lud ctrl=%lud flags=%lud",
-			m->dwMousePosition.X,
-			m->dwMousePosition.Y,
-			m->dwButtonState,
-			m->dwControlKeyState,
-			m->dwEventFlags);
-		return 1;
-	case WINDOW_BUFFER_SIZE_EVENT:
-		snprint(buf, n, "resize x=%d y=%d",
-			rec.Event.WindowBufferSizeEvent.dwSize.X,
-			rec.Event.WindowBufferSizeEvent.dwSize.Y);
-		return 1;
-	case FOCUS_EVENT:
-		snprint(buf, n, "focus set=%d", rec.Event.FocusEvent.bSetFocus);
-		return 1;
-	case MENU_EVENT:
-		snprint(buf, n, "menu cmd=%ud", rec.Event.MenuEvent.dwCommandId);
-		return 1;
-	default:
-		snprint(buf, n, "type=%ud", rec.EventType);
-		return 1;
 	}
 }
 
