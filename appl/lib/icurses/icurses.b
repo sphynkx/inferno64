@@ -88,43 +88,43 @@ logwrapperbegin(run: int)
 
 openkbd(): int
 {
-	run := sys->millisec();
+	runstamp := sys->millisec();
 
-	logwrapperbegin(run);
-	logwrapper(run, "cons.open.begin", ConsctlPath);
+	logwrapperbegin(runstamp);
+	logwrapper(runstamp, "cons.open.begin", ConsctlPath);
 	consctl = sys->open(ConsctlPath, Sys->OWRITE);
 	if(consctl == nil)
-		logwrapper(run, "cons.open.fail", sys->sprint("%r"));
+		logwrapper(runstamp, "cons.open.fail", sys->sprint("%r"));
 	else{
-		logwrapper(run, "cons.open.ok", sys->sprint("fd=%d", consctl.fd));
-		logwrapper(run, "rawon.begin", nil);
+		logwrapper(runstamp, "cons.open.ok", sys->sprint("fd=%d", consctl.fd));
+		logwrapper(runstamp, "rawon.begin", nil);
 		if(sys->fprint(consctl, "rawon") < 0)
-			logwrapper(run, "rawon.fail", sys->sprint("%r"));
+			logwrapper(runstamp, "rawon.fail", sys->sprint("%r"));
 		else
-			logwrapper(run, "rawon.ok", nil);
+			logwrapper(runstamp, "rawon.ok", nil);
 	}
 
-	logwrapper(run, "ekbd.open.begin", KeyboardPath);
+	logwrapper(runstamp, "ekbd.open.begin", KeyboardPath);
 	kbd = sys->open(KeyboardPath, Sys->OREAD);
 	if(kbd == nil){
-		logwrapper(run, "ekbd.open.fail", sys->sprint("%r"));
+		logwrapper(runstamp, "ekbd.open.fail", sys->sprint("%r"));
 		if(consctl != nil){
-			logwrapper(run, "cleanup.rawoff.begin", nil);
+			logwrapper(runstamp, "cleanup.rawoff.begin", nil);
 			if(sys->fprint(consctl, "rawoff") < 0)
-				logwrapper(run, "cleanup.rawoff.fail", sys->sprint("%r"));
+				logwrapper(runstamp, "cleanup.rawoff.fail", sys->sprint("%r"));
 			else
-				logwrapper(run, "cleanup.rawoff.ok", nil);
+				logwrapper(runstamp, "cleanup.rawoff.ok", nil);
 		}
 		consctl = nil;
-		logwrapper(run, "return.fail", "kbd=nil");
+		logwrapper(runstamp, "return.fail", "kbd=nil");
 		return -1;
 	}
-	logwrapper(run, "ekbd.open.ok", sys->sprint("fd=%d", kbd.fd));
+	logwrapper(runstamp, "ekbd.open.ok", sys->sprint("fd=%d", kbd.fd));
 
 	ks = "";
 	ki = 0;
 	kn = 0;
-	logwrapper(run, "return.ok", nil);
+	logwrapper(runstamp, "return.ok", nil);
 	return 0;
 }
 
