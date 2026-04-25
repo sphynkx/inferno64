@@ -10,7 +10,6 @@ kbuf: array of byte;
 ks: string;
 ki: int;
 kn: int;
-openkbdrun: int;
 
 LogPathEnv: con "/env/INFERNO_MINGW_EKBD_LOG";
 LogPathDefault: con "inferno-mingw-ekbd.log";
@@ -28,7 +27,6 @@ init()
 	ks = "";
 	ki = 0;
 	kn = 0;
-	openkbdrun = 0;
 }
 
 readfile(path: string): string
@@ -53,7 +51,7 @@ logpath(): string
 		return LogPathDefault;
 	if(path[len path-1] == '\n')
 		path = path[0:len path-1];
-	if(path == nil || len path == 0)
+	if(len path == 0)
 		return LogPathDefault;
 	return path;
 }
@@ -90,7 +88,7 @@ logwrapperbegin(run: int)
 
 openkbd(): int
 {
-	run := ++openkbdrun;
+	run := sys->millisec();
 
 	logwrapperbegin(run);
 	logwrapper(run, "cons.open.begin", ConsctlPath);
