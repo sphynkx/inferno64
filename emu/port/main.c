@@ -29,7 +29,6 @@ extern	int	mflag;
 	int	xtblbit;
 	ulong	displaychan;
 extern char *cputype;
-static int	cflagexplicit;
 
 static void
 usage(void)
@@ -139,7 +138,6 @@ option(int argc, char *argv[], void (*badusage)(void))
 		if (!isnum(cp))
 			badusage();
 		cflag = atoi(cp);
-		cflagexplicit = 1;
 		if(cflag < 0|| cflag > 9)
 			usage();
 		break;
@@ -262,17 +260,6 @@ main(int argc, char *argv[])
 		option(envc, enva, envusage);
 	}
 	option(argc, argv, usage);
-#ifdef __MINGW32__
-	/*
-	 * Temporary MinGW workaround:
-	 * the non-JIT interpreter path (-c0) mis-evaluates some Limbo int
-	 * comparisons after module calls, while the compiled path (-c1)
-	 * handles the same reproducer correctly.  Default to -c1 on MinGW
-	 * unless the user explicitly requested a different cflag.
-	 */
-	if(cflagexplicit == 0)
-		cflag = 1;
-#endif
 	eve = strdup("inferno");
 
 	opt = "interp";
