@@ -12,8 +12,11 @@ ki: int;
 kn: int;
 
 LogPathEnv: con "/env/INFERNO_MINGW_EKBD_LOG";
+LogWdirEnv: con "/env/emuwdir";
 LogPathDefault: con "inferno-mingw-ekbd.log";
 LogSeparator: con "======================\n";
+LogWrapperTag: con "LIMBO-OKBD-WRAPPER";
+HostFsPrefix: con "#U";
 
 init()
 {
@@ -35,55 +38,107 @@ readfile(path: string): string
 	if(fd == nil)
 		return nil;
 	(ok, st) := sys->fstat(fd);
-	if(ok < 0 || int st.length <= 0)
+	if(ok < 0 || int st.length <= 0){
+		fd = nil;
 		return nil;
+	}
 	buf := array[int st.length] of byte;
 	n := sys->read(fd, buf, len buf);
+	fd = nil;
 	if(n <= 0)
 		return nil;
 	return string buf[0:n];
 }
 
-logpath(): string
+trimline(s: string): string
 {
-	path := readfile(LogPathEnv);
-	if(path == nil || len path == 0)
-		return LogPathDefault;
-	if(path[len path-1] == '\n')
-		path = path[0:len path-1];
-	if(len path == 0)
-		return LogPathDefault;
-	return path;
+	if(s == nil)
+		return nil;
+	while(len s > 0){
+		c := s[len s-1];
+		if(c != '\n' && c != '\r')
+			break;
+		s = s[0:len s-1];
+	}
+	return s;
 }
 
-openlog(): ref Sys->FD
+hostjoin(base, leaf: string): string
 {
-	fd := sys->open(logpath(), Sys->OWRITE);
+	if(base == nil || len base == 0)
+		return leaf;
+	c := base[len base-1];
+	if(c == '/' || c == '\\')
+		return base + leaf;
+	return base + "/" + leaf;
+}
+
+hostlogpath(): string
+{
+	path := trimline(readfile(LogPathEnv));
+	if(path != nil && len path > 0)
+		return path;
+
+	wdir := trimline(readfile(LogWdirEnv));
+	if(wdir == nil || len wdir == 0)
+		return LogPathDefault;
+	return hostjoin(wdir, LogPathDefault);
+}
+
+infernohostpath(hostpath: string): string
+{
+	if(hostpath == nil || len hostpath == 0)
+		return nil;
+	if(len hostpath >= len HostFsPrefix && hostpath[0:len HostFsPrefix] == HostFsPrefix)
+		return hostpath;
+	return HostFsPrefix + hostpath;
+}
+
+openlog(): (ref Sys->FD, string, string)
+{
+	hostpath := hostlogpath();
+	path := infernohostpath(hostpath);
+	fd := sys->open(path, Sys->OWRITE);
 	if(fd == nil)
-		fd = sys->create(logpath(), Sys->OWRITE, 8r666);
+		fd = sys->create(path, Sys->OWRITE, 8r666);
 	if(fd != nil)
 		sys->seek(fd, big 0, Sys->SEEKEND);
-	return fd;
+	return (fd, hostpath, path);
+}
+
+writelog(line: string): int
+{
+	(fd, nil, nil) := openlog();
+	if(fd == nil)
+		return -1;
+	buf := array of byte line;
+	n := sys->write(fd, buf, len buf);
+	fd = nil;
+	if(n != len buf)
+		return -1;
+	return n;
 }
 
 logwrapper(run: int, step: string, detail: string)
 {
-	fd := openlog();
-	if(fd == nil)
-		return;
+	line: string;
+
 	if(detail == nil || len detail == 0)
-		sys->fprint(fd, "okbd wrapper run=%d pid=%d step=%s\n", run, sys->pctl(0, nil), step);
+		line = sys->sprint("%s run=%d pid=%d step=%s\n", LogWrapperTag, run, sys->pctl(0, nil), step);
 	else
-		sys->fprint(fd, "okbd wrapper run=%d pid=%d step=%s detail=%s\n", run, sys->pctl(0, nil), step, detail);
+		line = sys->sprint("%s run=%d pid=%d step=%s detail=%s\n", LogWrapperTag, run, sys->pctl(0, nil), step, detail);
+	if(writelog(line) < 0)
+		return;
 }
 
 logwrapperbegin(run: int)
 {
-	fd := openlog();
+	(fd, hostpath, path) := openlog();
 	if(fd == nil)
 		return;
-	sys->fprint(fd, "%s", LogSeparator);
-	sys->fprint(fd, "okbd wrapper run=%d pid=%d step=begin\n", run, sys->pctl(0, nil));
+	sys->fprint(fd, "%s%s run=%d pid=%d step=begin detail=host=%s inferno=%s\n",
+		LogSeparator, LogWrapperTag, run, sys->pctl(0, nil), hostpath, path);
+	fd = nil;
 }
 
 openkbd(): int
