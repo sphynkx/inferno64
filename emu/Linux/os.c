@@ -528,20 +528,26 @@ osconssize(char *buf, int n)
 	if(rows <= 0)
 		rows = 24;
 
-	return snprint(buf, n,
-		"%d %d\n"
-		"cols=%d\n"
-		"rows=%d\n"
-		"pixelwidth=%d\n"
-		"pixelheight=%d\n"
-		"source=%s\n"
-		"ok=%d\n",
-		cols, rows,
-		cols, rows,
-		(int)ws.ws_xpixel,
-		(int)ws.ws_ypixel,
-		source,
-		ok);
+return snprint(buf, n,
+	"%d %d\n"
+	"cols=%d\n"
+	"rows=%d\n"
+	"pixelwidth=%d\n"
+	"pixelheight=%d\n"
+	"vt=1\n"
+	"utf8=1\n"
+	"colors=%d\n"
+	"truecolor=%d\n"
+	"source=%s\n"
+	"ok=%d\n",
+	cols, rows,
+	cols, rows,
+	(int)ws.ws_xpixel,
+	(int)ws.ws_ypixel,
+	16777216,
+	1,
+	source,
+	ok);
 }
 
 

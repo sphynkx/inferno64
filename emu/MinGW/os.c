@@ -1515,24 +1515,32 @@ osconssize(char *buf, int n)
 	if(rows <= 0)
 		rows = 24;
 
-	return snprint(buf, n,
-		"%d %d\n"
-		"cols=%d\n"
-		"rows=%d\n"
-		"buffercols=%d\n"
-		"bufferrows=%d\n"
-		"left=%d\n"
-		"top=%d\n"
-		"right=%d\n"
-		"bottom=%d\n"
-		"cursorx=%d\n"
-		"cursory=%d\n"
-		"source=mingw-console\n",
-		cols, rows,
-		cols, rows,
-		buffercols, bufferrows,
-		left, top, right, bottom,
-		cursorx, cursory);
+return snprint(buf, n,
+	"%d %d\n"
+	"cols=%d\n"
+	"rows=%d\n"
+	"buffercols=%d\n"
+	"bufferrows=%d\n"
+	"left=%d\n"
+	"top=%d\n"
+	"right=%d\n"
+	"bottom=%d\n"
+	"cursorx=%d\n"
+	"cursory=%d\n"
+	"vt=%d\n"
+	"utf8=%d\n"
+	"colors=%d\n"
+	"truecolor=%d\n"
+	"source=mingw-console\n",
+	cols, rows,
+	cols, rows,
+	buffercols, bufferrows,
+	left, top, right, bottom,
+	cursorx, cursory,
+	vtoutputactive,
+	consolecpchanged ? 1 : 0,
+	vtoutputactive ? 16777216 : 16,
+	vtoutputactive ? 1 : 0);
 }
 
 static	int	rebootok = 0;
