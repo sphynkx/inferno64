@@ -8,6 +8,7 @@
 #include	<sys/select.h>
 #include	<sys/wait.h>
 #include	<sys/time.h>
+#include	<sys/ioctl.h>
 
 #include	<errno.h>
 #include	<stdint.h>
@@ -480,6 +481,69 @@ osmillisec(void)
 	}
 	return (t.tv_sec-sec0)*1000+(t.tv_usec-usec0+500)/1000;
 }
+
+int
+osconssize(char *buf, int n)
+{
+	struct winsize ws;
+	int cols, rows;
+	int ok;
+	char *source;
+
+	if(buf == nil || n <= 0)
+		return -1;
+
+	cols = 80;
+	rows = 24;
+	ok = 0;
+	source = "fallback-linux";
+
+	memset(&ws, 0, sizeof ws);
+
+	if(ioctl(1, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0){
+		cols = ws.ws_col;
+		rows = ws.ws_row;
+		ok = 1;
+		source = "linux-ioctl-stdout";
+	}else{
+		memset(&ws, 0, sizeof ws);
+		if(ioctl(0, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0){
+			cols = ws.ws_col;
+			rows = ws.ws_row;
+			ok = 1;
+			source = "linux-ioctl-stdin";
+		}else{
+			memset(&ws, 0, sizeof ws);
+			if(ioctl(2, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0){
+				cols = ws.ws_col;
+				rows = ws.ws_row;
+				ok = 1;
+				source = "linux-ioctl-stderr";
+			}
+		}
+	}
+
+	if(cols <= 0)
+		cols = 80;
+	if(rows <= 0)
+		rows = 24;
+
+	return snprint(buf, n,
+		"%d %d\n"
+		"cols=%d\n"
+		"rows=%d\n"
+		"pixelwidth=%d\n"
+		"pixelheight=%d\n"
+		"source=%s\n"
+		"ok=%d\n",
+		cols, rows,
+		cols, rows,
+		(int)ws.ws_xpixel,
+		(int)ws.ws_ypixel,
+		source,
+		ok);
+}
+
 
 /*
  * Return the time since the epoch in nanoseconds and microseconds

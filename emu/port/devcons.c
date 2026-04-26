@@ -6,6 +6,10 @@
 #include	"libsec.h"
 #include	"keyboard.h"
 
+#if defined(__MINGW32__) || defined(__linux__)
+extern int osconssize(char*, int);
+#endif
+
 extern int cflag;
 extern int exdebug;
 extern int keepbroken;
@@ -15,6 +19,7 @@ enum
 	Qdir,
 	Qcons,
 	Qconsctl,
+	Qconssize,
 	Qdrivers,
 	Qhostowner,
 	Qhoststdin,
@@ -39,10 +44,11 @@ enum
 
 Dirtab contab[] =
 {
-	".",	{Qdir, 0, QTDIR},	0,		DMDIR|0555,
-	"cons",		{Qcons},	0,	0666,
-	"consctl",	{Qconsctl},	0,	0222,
-	"drivers",	{Qdrivers},	0,	0444,
+	".",		{Qdir, 0, QTDIR},	0,	DMDIR|0555,
+	"cons",		{Qcons},		0,	0666,
+	"consctl",	{Qconsctl},		0,	0222,
+	"conssize",	{Qconssize},		0,	0444,
+	"drivers",	{Qdrivers},		0,	0444,
 	"ekeyboard",	{Qekeyboard},	0,	0666,
 	"emouse",	{Qemouse},	0,	0666,
 	"hostowner",	{Qhostowner},	0,	0644,
@@ -538,7 +544,8 @@ static long
 consread(Chan *c, void *va, long n, vlong offset)
 {
 	int send;
-	char buf[64], ch;
+	long r;
+	char buf[64], ch, *s;
 
 	if(c->qid.type & QTDIR)
 		return devdirread(c, va, n, contab, nelem(contab), devgen);
@@ -578,6 +585,36 @@ consread(Chan *c, void *va, long n, vlong offset)
 	case Qtime:
 		snprint(buf, sizeof(buf), "%.lld", timeoffset + osusectime());
 		return readstr(offset, va, n, buf);
+
+	case Qconssize:
+		s = malloc(READSTR);
+		if(s == nil)
+			error(Enomem);
+
+		if(waserror()){
+			free(s);
+			nexterror();
+		}
+
+#if defined(__MINGW32__) || defined(__linux__)
+		if(osconssize(s, READSTR) < 0)
+			snprint(s, READSTR,
+				"80 24\n"
+				"cols=80\n"
+				"rows=24\n"
+				"source=fallback-osconssize\n");
+#else
+		snprint(s, READSTR,
+			"80 24\n"
+			"cols=80\n"
+			"rows=24\n"
+			"source=fallback-generic\n");
+#endif
+
+		r = readstr(offset, va, n, s);
+		free(s);
+		poperror();
+		return r;
 
 	case Qdrivers:
 		return devtabread(c, va, n, offset);

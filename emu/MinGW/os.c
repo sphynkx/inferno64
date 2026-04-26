@@ -1352,6 +1352,76 @@ termrestore(void)
 
 }
 
+int
+osconssize(char *buf, int n)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	HANDLE h;
+	int cols, rows;
+	int buffercols, bufferrows;
+	int left, top, right, bottom;
+	int cursorx, cursory;
+
+	if(buf == nil || n <= 0)
+		return -1;
+
+	h = conh;
+	if(h == INVALID_HANDLE_VALUE || h == NULL)
+		h = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	if(h == INVALID_HANDLE_VALUE || h == NULL)
+		return snprint(buf, n,
+			"80 24\n"
+			"cols=80\n"
+			"rows=24\n"
+			"source=fallback-no-console\n");
+
+	if(!GetConsoleScreenBufferInfo(h, &info))
+		return snprint(buf, n,
+			"80 24\n"
+			"cols=80\n"
+			"rows=24\n"
+			"source=fallback-consolegetinfo\n");
+
+	left = info.srWindow.Left;
+	top = info.srWindow.Top;
+	right = info.srWindow.Right;
+	bottom = info.srWindow.Bottom;
+
+	cols = right - left + 1;
+	rows = bottom - top + 1;
+
+	buffercols = info.dwSize.X;
+	bufferrows = info.dwSize.Y;
+
+	cursorx = info.dwCursorPosition.X;
+	cursory = info.dwCursorPosition.Y;
+
+	if(cols <= 0)
+		cols = 80;
+	if(rows <= 0)
+		rows = 24;
+
+	return snprint(buf, n,
+		"%d %d\n"
+		"cols=%d\n"
+		"rows=%d\n"
+		"buffercols=%d\n"
+		"bufferrows=%d\n"
+		"left=%d\n"
+		"top=%d\n"
+		"right=%d\n"
+		"bottom=%d\n"
+		"cursorx=%d\n"
+		"cursory=%d\n"
+		"source=mingw-console\n",
+		cols, rows,
+		cols, rows,
+		buffercols, bufferrows,
+		left, top, right, bottom,
+		cursorx, cursory);
+}
+
 static	int	rebootok = 0;
 
 void
