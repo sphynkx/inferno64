@@ -12,6 +12,14 @@
 
 #include	"r16.h"
 
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
+
+#ifndef DISABLE_NEWLINE_AUTO_RETURN
+#define DISABLE_NEWLINE_AUTO_RETURN 0x0008
+#endif
+
 int	SYS_SLEEP = 2;
 int SOCK_SELECT = 3;
 #define	MAXSLEEPERS	1500
@@ -25,6 +33,7 @@ static HANDLE conh = INVALID_HANDLE_VALUE;
 static HANDLE kbdh = INVALID_HANDLE_VALUE;
 static HANDLE errh = INVALID_HANDLE_VALUE;
 
+static int vtoutputactive = 0;
 static UINT hostinputcp = 0;
 static UINT hostoutputcp = 0;
 static int consolecpsaved = 0;
@@ -33,6 +42,9 @@ static int consolecpchanged = 0;
 static DWORD mouseconsolestate = 0;
 static int mousemodesaved = 0;
 static int mousemodeactive = 0;
+
+static DWORD consoleoutstate = 0;
+static int consoleoutstatesaved = 0;
 
 enum {
 	ConNorm,
@@ -94,6 +106,53 @@ setutf8consolecp(void)
 		consolecpchanged = 0;
 	}
 }
+
+
+static void
+enableconsolevtoutput(void)
+{
+	DWORD mode, newmode;
+
+	vtoutputactive = 0;
+
+	if(conh == INVALID_HANDLE_VALUE || conh == NULL)
+		return;
+
+	if(!GetConsoleMode(conh, &mode))
+		return;
+
+	if(!consoleoutstatesaved){
+		consoleoutstate = mode;
+		consoleoutstatesaved = 1;
+	}
+
+	/*
+	 * Enable VT processing, but explicitly do NOT enable
+	 * DISABLE_NEWLINE_AUTO_RETURN.
+	 *
+	 * DISABLE_NEWLINE_AUTO_RETURN is exactly the kind of mode that
+	 * makes bare '\n' stop behaving like normal console newline output.
+	 */
+	newmode = mode;
+	newmode |= ENABLE_PROCESSED_OUTPUT;
+	newmode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+	newmode &= ~DISABLE_NEWLINE_AUTO_RETURN;
+
+	if(SetConsoleMode(conh, newmode)){
+		vtoutputactive = 1;
+		return;
+	}
+
+	/*
+	 * If VT is unavailable, at least keep processed output enabled and
+	 * keep newline auto-return behavior normal.
+	 */
+	newmode = mode;
+	newmode |= ENABLE_PROCESSED_OUTPUT;
+	newmode &= ~DISABLE_NEWLINE_AUTO_RETURN;
+	SetConsoleMode(conh, newmode);
+}
+
 
 static void
 restoreconsolecp(void)
@@ -669,6 +728,52 @@ flushplain(HANDLE h, char *buf, int n, int *total)
 }
 
 static int
+consolewritevt(HANDLE h, const void *vbuf, uint n)
+{
+	char *buf;
+	char out[512];
+	int i, np;
+	DWORD nwritten;
+
+	if(h == INVALID_HANDLE_VALUE || h == NULL)
+		return -1;
+
+	buf = (char*)vbuf;
+	np = 0;
+
+	for(i = 0; i < (int)n; i++){
+		/*
+		 * Inferno and Unix-style programs normally write '\n'.
+		 * Windows console VT mode may treat bare LF as "move down,
+		 * keep current column". Make output text semantics stable by
+		 * emitting CRLF unless the LF is already preceded by CR.
+		 */
+		if(buf[i] == '\n' && (i == 0 || buf[i-1] != '\r')){
+			if(np >= (int)sizeof(out)){
+				if(!WriteFile(h, out, np, &nwritten, NULL))
+					return -1;
+				np = 0;
+			}
+			out[np++] = '\r';
+		}
+
+		if(np >= (int)sizeof(out)){
+			if(!WriteFile(h, out, np, &nwritten, NULL))
+				return -1;
+			np = 0;
+		}
+		out[np++] = buf[i];
+	}
+
+	if(np > 0){
+		if(!WriteFile(h, out, np, &nwritten, NULL))
+			return -1;
+	}
+
+	return (int)n;
+}
+
+static int
 consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 {
 	char *buf;
@@ -682,6 +787,9 @@ consolewrite(HANDLE h, ConParser *p, const void *vbuf, uint n)
 			return -1;
 		return (int)nwritten;
 	}
+
+	if(vtoutputactive)
+		return consolewritevt(h, vbuf, n);
 
 	buf = (char*)vbuf;
 	np = 0;
@@ -1327,6 +1435,8 @@ termset(void)
 	if(errh == INVALID_HANDLE_VALUE)
 		errh = conh;
 
+	enableconsolevtoutput();
+
 	if(GetConsoleMode(kbdh, &consolestate)){
 		flag = consolestate;
 		flag &= ~(ENABLE_PROCESSED_INPUT|ENABLE_LINE_INPUT|ENABLE_ECHO_INPUT);
@@ -1346,6 +1456,9 @@ termrestore(void)
 
 	if(kbdh != INVALID_HANDLE_VALUE)
 		SetConsoleMode(kbdh, consolestate);
+
+	if(conh != INVALID_HANDLE_VALUE && consoleoutstatesaved)
+		SetConsoleMode(conh, consoleoutstate);
 
 	if(consolecpsaved)
 		restoreconsolecp();
