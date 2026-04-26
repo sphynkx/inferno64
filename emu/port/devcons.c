@@ -7,7 +7,7 @@
 #include	"keyboard.h"
 
 #if defined(__MINGW32__) || defined(__linux__)
-extern int osconssize(char*, int);
+extern int osconsinfo(char*, int);
 #endif
 
 extern int cflag;
@@ -19,7 +19,7 @@ enum
 	Qdir,
 	Qcons,
 	Qconsctl,
-	Qconssize,
+	Qconsinfo,
 	Qdrivers,
 	Qhostowner,
 	Qhoststdin,
@@ -47,7 +47,7 @@ Dirtab contab[] =
 	".",		{Qdir, 0, QTDIR},	0,	DMDIR|0555,
 	"cons",		{Qcons},		0,	0666,
 	"consctl",	{Qconsctl},		0,	0222,
-	"conssize",	{Qconssize},		0,	0444,
+	"consinfo",	{Qconsinfo},		0,	0444,
 	"drivers",	{Qdrivers},		0,	0444,
 	"ekeyboard",	{Qekeyboard},	0,	0666,
 	"emouse",	{Qemouse},	0,	0666,
@@ -586,7 +586,7 @@ consread(Chan *c, void *va, long n, vlong offset)
 		snprint(buf, sizeof(buf), "%.lld", timeoffset + osusectime());
 		return readstr(offset, va, n, buf);
 
-	case Qconssize:
+	case Qconsinfo:
 		s = malloc(READSTR);
 		if(s == nil)
 			error(Enomem);
@@ -597,12 +597,12 @@ consread(Chan *c, void *va, long n, vlong offset)
 		}
 
 #if defined(__MINGW32__) || defined(__linux__)
-		if(osconssize(s, READSTR) < 0)
+		if(osconsinfo(s, READSTR) < 0)
 			snprint(s, READSTR,
 				"80 24\n"
 				"cols=80\n"
 				"rows=24\n"
-				"source=fallback-osconssize\n");
+				"source=fallback-osconsinfo\n");
 #else
 		snprint(s, READSTR,
 			"80 24\n"

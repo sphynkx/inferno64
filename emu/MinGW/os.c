@@ -1466,7 +1466,7 @@ termrestore(void)
 }
 
 int
-osconssize(char *buf, int n)
+osconsinfo(char *buf, int n)
 {
 	CONSOLE_SCREEN_BUFFER_INFO info;
 	HANDLE h;

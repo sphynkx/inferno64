@@ -483,7 +483,7 @@ osmillisec(void)
 }
 
 int
-osconssize(char *buf, int n)
+osconsinfo(char *buf, int n)
 {
 	struct winsize ws;
 	int cols, rows;
